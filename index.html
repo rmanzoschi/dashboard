@@ -1222,6 +1222,8 @@
 
             scene3D = new THREE.Scene();
             scene3D.background = new THREE.Color(0x090c12);
+            // Niebla atmosférica sutil para dar profundidad de estudio
+            scene3D.fog = new THREE.FogExp2(0x090c12, 0.45);
 
             camera3D = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.01, 100);
             camera3D.position.set(0.28, 0.22, 0.38);
@@ -1232,6 +1234,12 @@
             renderer3D.outputEncoding = THREE.sRGBEncoding;
             renderer3D.toneMapping = THREE.LinearToneMapping;
             renderer3D.toneMappingExposure = AJUSTES_3D.exposicion;
+
+            // 1. ACTIVAR MOTOR DE SOMBRAS SUAVES (PCFSoftShadowMap)
+            renderer3D.shadowMap.enabled = true;
+            renderer3D.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer3D.physicallyCorrectLights = true;
+
             container.appendChild(renderer3D.domElement);
 
             controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement);
@@ -1242,32 +1250,59 @@
 
             controls3D.addEventListener('start', () => { camaraAnimando = false; });
 
-            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x222938, AJUSTES_3D.entorno * 1.6);
+            // Iluminación de estudio con proyección de sombras
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x1e293b, AJUSTES_3D.entorno * 2.2);
             scene3D.add(hemiLight);
 
-            const dirLight = new THREE.DirectionalLight(0xffffff, AJUSTES_3D.luzDirecta);
-            dirLight.position.set(1.5, 2.5, 2.0);
+            // Luz principal (Key Light) con sombras en alta resolución (2048x2048)
+            const dirLight = new THREE.DirectionalLight(0xffffff, AJUSTES_3D.luzDirecta * 2.8);
+            dirLight.position.set(0.6, 1.2, 0.8);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            dirLight.shadow.camera.near = 0.05;
+            dirLight.shadow.camera.far = 4.0;
+            const d = 0.35;
+            dirLight.shadow.camera.left = -d;
+            dirLight.shadow.camera.right = d;
+            dirLight.shadow.camera.top = d;
+            dirLight.shadow.camera.bottom = -d;
+            dirLight.shadow.bias = -0.0005;
+            dirLight.shadow.normalBias = 0.02;
             scene3D.add(dirLight);
 
-            const fillLight = new THREE.DirectionalLight(0xdbeafe, AJUSTES_3D.luzDirecta * 0.45);
-            fillLight.position.set(-1.5, -1.0, -1.5);
+            // Luz de relleno fría (Fill Light) para suavizar sombras duras adentro de la caja
+            const fillLight = new THREE.DirectionalLight(0xdbeafe, AJUSTES_3D.luzDirecta * 1.1);
+            fillLight.position.set(-1.2, 0.4, -1.0);
             scene3D.add(fillLight);
+
+            // Contraluz dorada sutil (Rim Light) para recortar la silueta de la caja
+            const rimLight = new THREE.SpotLight(0xffc500, 1.4);
+            rimLight.position.set(0, 0.5, -0.8);
+            scene3D.add(rimLight);
 
             function procesarEscenaGLTF(gltf) {
                 const root = gltf.scene;
                 modeloRaiz3D = root;
 
+                // Activar emisión y recepción de sombras en cada pieza y sensor
                 root.traverse((child) => {
-                    if (child.isMesh && child.material) {
-                        child.material = child.material.clone();
-                        if (child.material.color) {
-                            child.material.color.multiplyScalar(AJUSTES_3D.brilloMateriales);
-                        }
-                        if (child.material.metalness !== undefined) {
-                            child.material.metalness = Math.min(child.material.metalness, 0.25);
-                        }
-                        if (child.material.roughness !== undefined) {
-                            child.material.roughness = Math.max(child.material.roughness, 0.45);
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+
+                        if (child.material) {
+                            child.material = child.material.clone();
+                            if (child.material.color) {
+                                child.material.color.multiplyScalar(AJUSTES_3D.brilloMateriales);
+                            }
+                            if (child.material.metalness !== undefined) {
+                                child.material.metalness = Math.min(child.material.metalness, 0.25);
+                            }
+                            if (child.material.roughness !== undefined) {
+                                child.material.roughness = Math.max(child.material.roughness, 0.4);
+                            }
+                            child.material.needsUpdate = true;
                         }
                     }
                 });
@@ -1294,6 +1329,15 @@
                 const center = box.getCenter(new THREE.Vector3());
                 const size = box.getSize(new THREE.Vector3());
                 const maxDim = Math.max(size.x, size.y, size.z) || 0.25;
+
+                // 2. PLANO RECEPTOR DE SOMBRA DE APOYO (Piso invisible con sombra suave)
+                const pisoGeom = new THREE.PlaneGeometry(maxDim * 8, maxDim * 8);
+                const pisoMat = new THREE.ShadowMaterial({ opacity: 0.45 });
+                const pisoSombra = new THREE.Mesh(pisoGeom, pisoMat);
+                pisoSombra.rotation.x = -Math.PI / 2;
+                pisoSombra.position.y = box.min.y - 0.002;
+                pisoSombra.receiveShadow = true;
+                scene3D.add(pisoSombra);
 
                 controls3D.target.copy(center);
                 camera3D.position.set(
@@ -1337,7 +1381,6 @@
             });
 
             renderer3D.domElement.addEventListener('pointerup', (e) => {
-                // Solo disparar selección si fue un clic limpio (no un arrastre de cámara)
                 const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
                 if (dist > 6 || !modeloRaiz3D) return;
 
@@ -1352,7 +1395,6 @@
 
                 const intersects = raycaster.intersectObjects(objetosRaycast, true);
                 if (intersects.length > 0) {
-                    // Buscar el primer impacto que corresponda a un sensor específico antes que a la carcasa
                     let claveElegida = null;
                     for (let i = 0; i < intersects.length; i++) {
                         const c = detectarClaveSensorDesdeObjeto3D(intersects[i].object);
