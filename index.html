@@ -855,6 +855,7 @@
                     <button class="sensor-chip" data-sensor="inmp441" onclick="seleccionarComponentePorClave('inmp441')"><i class="ph-bold ph-microphone"></i> INMP441</button>
                     <button class="sensor-chip" data-sensor="pir" onclick="seleccionarComponentePorClave('pir')"><i class="ph-bold ph-user-focus"></i> PIR HC-SR501</button>
                     <button class="sensor-chip" data-sensor="lcd" onclick="seleccionarComponentePorClave('lcd')"><i class="ph-bold ph-monitor"></i> LCD 16x2 I2C</button>
+                    <button class="sensor-chip" data-sensor="caja" onclick="seleccionarComponentePorClave('caja')"><i class="ph-bold ph-cube"></i> Caja Estanca</button>
                 </div>
 
                 <!-- Escenario 3D + Tarjeta Flotante de Datasheet -->
@@ -964,6 +965,9 @@
         // ==========================================
         // CATÁLOGO DE SENSORES Y BATERÍA (SIN CAJA ESTANCA)
         // ==========================================
+        // ==========================================
+        // CATÁLOGO DE SENSORES, BATERÍA Y CAJA (CAJA SIN DATASHEET)
+        // ==========================================
         const CATALOGO_SENSORES_3D = {
             esp32: {
                 titulo: "ESP32-C3 SuperMini",
@@ -1036,6 +1040,15 @@
                 alimentacion: "5V DC",
                 requiereAbrirTapa: false,
                 datasheet: "https://www.sparkfun.com/datasheets/LCD/HD44780.pdf"
+            },
+            caja: {
+                titulo: "Gabinete Estanco IP65 Mecanizado",
+                categoria: "Estructura y Fijación Mural",
+                descripcion: "Carcasa industrial de polímero ABS de alta resistencia, mecanizada a medida para alojar los sensores ambientales, la pantalla LCD frontal y el sistema autónomo de energía. Se encuentra amurada a la pared mediante 4 soportes metálicos esquineros con tornillos de fijación.",
+                pines: "Montaje Frontal: LCD + PIR | Montaje Interno: ESP32-C3 + Batería",
+                alimentacion: "Protección mecánica IP65 / Aislación Clase II",
+                requiereAbrirTapa: false,
+                datasheet: null // Sin botón de Datasheet
             }
         };
 
@@ -1114,7 +1127,7 @@
         });
 
         // ==========================================
-        // GENERADOR DE TEXTURA PROCEDURAL (MICRO-RUGOSIDAD ABS / PCB)
+        // GENERADOR DE TEXTURA PROCEDURAL (MICRO-RUGOSIDAD ABS / PARED)
         // ==========================================
         function crearTexturaMicroRugosa(intensidad = 28, repeticiones = 14) {
             const size = 256;
@@ -1142,17 +1155,154 @@
         }
 
         // ==========================================
-        // IDENTIFICADOR DE COMPONENTES 3D (CON BATERÍA Y SIN CAJA)
+        // CONSTRUCCIÓN DE LA PARED Y SOPORTES ATORNILLADOS
+        // ==========================================
+        function crearParedYMontaje(boxCaja, texturaPared) {
+            const grupoPared = new THREE.Group();
+            grupoPared.name = "entorno_pared_no_click";
+
+            const size = boxCaja.getSize(new THREE.Vector3());
+            const center = boxCaja.getCenter(new THREE.Vector3());
+
+            // Coordenada trasera exacta de la caja estanca
+            const zEspaldaCaja = boxCaja.min.z;
+            const espesorPared = size.z * 0.22;
+            const anchoPared = size.x * 3.4;
+            const altoPared = size.y * 3.0;
+
+            // 1. Muro principal con textura de revoque fino oscuro para resaltar el nodo
+            const matPared = new THREE.MeshStandardMaterial({
+                color: 0x1e2430,
+                roughness: 0.92,
+                metalness: 0.02,
+                bumpMap: texturaPared,
+                bumpScale: 0.0025,
+                roughnessMap: texturaPared
+            });
+            const mallaPared = new THREE.Mesh(
+                new THREE.BoxGeometry(anchoPared, altoPared, espesorPared),
+                matPared
+            );
+            mallaPared.position.set(center.x, center.y + size.y * 0.15, zEspaldaCaja - espesorPared / 2 - 0.002);
+            mallaPared.receiveShadow = true;
+            grupoPared.add(mallaPared);
+
+            // 2. Zócalo / Moldura inferior en la pared para dar realismo arquitectónico
+            const altoZocalo = altoPared * 0.1;
+            const matZocalo = new THREE.MeshStandardMaterial({
+                color: 0x11151d,
+                roughness: 0.6,
+                metalness: 0.15
+            });
+            const mallaZocalo = new THREE.Mesh(
+                new THREE.BoxGeometry(anchoPared + 0.002, altoZocalo, espesorPared * 0.25),
+                matZocalo
+            );
+            mallaZocalo.position.set(
+                center.x,
+                mallaPared.position.y - altoPared / 2 + altoZocalo / 2,
+                zEspaldaCaja - 0.001
+            );
+            mallaZocalo.receiveShadow = true;
+            mallaZocalo.castShadow = true;
+            grupoPared.add(mallaZocalo);
+
+            // 3. Cuatro orejas / ménsulas metálicas con tornillos y arandelas fijando la caja a la pared
+            const matMetalSoporte = new THREE.MeshStandardMaterial({
+                color: 0x64748b,
+                roughness: 0.35,
+                metalness: 0.75
+            });
+            const matTornillo = new THREE.MeshStandardMaterial({
+                color: 0xcbd5e1,
+                roughness: 0.25,
+                metalness: 0.9
+            });
+            const matRanura = new THREE.MeshStandardMaterial({
+                color: 0x0f172a,
+                roughness: 0.8
+            });
+
+            const anchoOreja = size.x * 0.14;
+            const altoOreja = size.y * 0.12;
+            const profOreja = 0.006;
+
+            const esquinas = [
+                { sx: -1, sy:  1 },
+                { sx:  1, sy:  1 },
+                { sx: -1, sy: -1 },
+                { sx:  1, sy: -1 }
+            ];
+
+            esquinas.forEach(({ sx, sy }) => {
+                const grupoSoporte = new THREE.Group();
+
+                // Posición de la oreja sobresaliendo de cada esquina de la caja
+                const posX = center.x + sx * (size.x * 0.5 + anchoOreja * 0.28);
+                const posY = center.y + sy * (size.y * 0.42);
+                const posZ = zEspaldaCaja + profOreja / 2 - 0.001;
+
+                // Planchuela / Oreja de sujeción
+                const oreja = new THREE.Mesh(
+                    new THREE.BoxGeometry(anchoOreja, altoOreja, profOreja),
+                    matMetalSoporte
+                );
+                oreja.position.set(posX, posY, posZ);
+                oreja.castShadow = true;
+                oreja.receiveShadow = true;
+                grupoSoporte.add(oreja);
+
+                // Arandela
+                const radioTornillo = Math.min(anchoOreja, altoOreja) * 0.26;
+                const arandela = new THREE.Mesh(
+                    new THREE.CylinderGeometry(radioTornillo * 1.35, radioTornillo * 1.35, 0.002, 20),
+                    matMetalSoporte
+                );
+                arandela.rotation.x = Math.PI / 2;
+                arandela.position.set(posX + sx * (anchoOreja * 0.12), posY, posZ + profOreja / 2 + 0.001);
+                arandela.castShadow = true;
+                grupoSoporte.add(arandela);
+
+                // Cabeza hexagonal/cilíndrica del tornillo tirafondo
+                const cabezaTornillo = new THREE.Mesh(
+                    new THREE.CylinderGeometry(radioTornillo, radioTornillo, 0.0045, 6),
+                    matTornillo
+                );
+                cabezaTornillo.rotation.x = Math.PI / 2;
+                cabezaTornillo.position.set(arandela.position.x, posY, arandela.position.z + 0.0025);
+                cabezaTornillo.castShadow = true;
+                grupoSoporte.add(cabezaTornillo);
+
+                // Ranura en cruz (Phillips) en la cabeza del tornillo
+                const ranura1 = new THREE.Mesh(
+                    new THREE.BoxGeometry(radioTornillo * 1.3, radioTornillo * 0.22, 0.0015),
+                    matRanura
+                );
+                ranura1.position.set(arandela.position.x, posY, cabezaTornillo.position.z + 0.0022);
+                grupoSoporte.add(ranura1);
+
+                const ranura2 = new THREE.Mesh(
+                    new THREE.BoxGeometry(radioTornillo * 0.22, radioTornillo * 1.3, 0.0015),
+                    matRanura
+                );
+                ranura2.position.set(arandela.position.x, posY, cabezaTornillo.position.z + 0.0022);
+                grupoSoporte.add(ranura2);
+
+                grupoPared.add(grupoSoporte);
+            });
+
+            return grupoPared;
+        }
+
+        // ==========================================
+        // IDENTIFICADOR DE COMPONENTES 3D (CON BATERÍA Y CAJA)
         // ==========================================
         function detectarClaveSensorDesdeObjeto3D(obj) {
             let actual = obj;
             while (actual) {
                 const nombre = (actual.name || "").toLowerCase();
                 if (nombre) {
-                    // Ignorar explícitamente la caja estanca para que no sea clickeable ni tenga datasheet
-                    if (nombre === "caja_tapa" || nombre === "caja_base" || nombre === "caja" || nombre === "gabinete") {
-                        return null;
-                    }
+                    if (nombre.includes("entorno_pared_no_click")) return null;
                     if (nombre.includes("bat") || nombre.includes("18650") || nombre.includes("lipo") || nombre.includes("pila") || nombre.includes("power") || nombre.includes("porta") || nombre.includes("celda") || nombre.includes("tp4056")) return "bateria";
                     if (nombre.includes("lcd") || nombre.includes("16x2") || nombre.includes("display")) return "lcd";
                     if (nombre.includes("pir") || nombre.includes("sr501") || nombre.includes("fresnel")) return "pir";
@@ -1161,6 +1311,7 @@
                     if (nombre.includes("mq135") || nombre.includes("mq_135") || nombre.includes("mq") || nombre.includes("gas")) return "mq135";
                     if (nombre.includes("inmp") || nombre.includes("441") || nombre.includes("mic") || nombre.includes("i2s")) return "inmp441";
                     if (nombre.includes("esp32") || nombre.includes("c3") || nombre.includes("supermini") || nombre.includes("mcu") || nombre.includes("usb")) return "esp32";
+                    if (nombre.includes("caja_tapa") || nombre.includes("caja_base") || nombre.includes("caja") || nombre.includes("gabinete")) return "caja";
                 }
                 actual = actual.parent;
             }
@@ -1182,6 +1333,8 @@
             const info = CATALOGO_SENSORES_3D[claveSensor];
             if (!info) return;
 
+            const intensidadBrillo = (claveSensor === 'caja') ? 0.18 : 0.45;
+
             const buscarYResaltar = (raiz) => {
                 if (!raiz) return;
                 raiz.traverse((child) => {
@@ -1194,7 +1347,7 @@
                                 origIntensity: child.material.emissiveIntensity || 1
                             });
                             child.material.emissive.setHex(0xffc500);
-                            child.material.emissiveIntensity = 0.45;
+                            child.material.emissiveIntensity = intensidadBrillo;
                         }
                     }
                 });
@@ -1223,11 +1376,18 @@
             document.getElementById('info-card-title').innerText = info.titulo;
             document.getElementById('info-card-desc').innerText = info.descripcion;
             document.getElementById('info-card-specs').innerHTML = `
-                <span><strong>Conexión:</strong> ${info.pines}</span>
-                <span><strong>Alimentación:</strong> ${info.alimentacion}</span>
+                <span><strong>Detalles:</strong> ${info.pines}</span>
+                <span><strong>Especificación:</strong> ${info.alimentacion}</span>
             `;
+
+            // Mostrar el botón de Datasheet solo si tiene link (la Caja Estanca no lo muestra)
             const linkEl = document.getElementById('info-card-link');
-            linkEl.href = info.datasheet;
+            if (info.datasheet) {
+                linkEl.href = info.datasheet;
+                linkEl.style.display = 'flex';
+            } else {
+                linkEl.style.display = 'none';
+            }
 
             document.getElementById('sensor-info-card').classList.add('visible');
         }
@@ -1239,7 +1399,7 @@
         }
 
         // ==========================================
-        // VISOR 3D CON SOMBRAS SUAVES + TEXTURA FÍSICA + SENSORES/BATERÍA
+        // VISOR 3D CON PARED ATORNILLADA + SOMBRAS + TEXTURAS
         // ==========================================
         function inicializarVisor3DDirecto() {
             const container = document.getElementById('webgl-container');
@@ -1247,7 +1407,7 @@
 
             scene3D = new THREE.Scene();
             scene3D.background = new THREE.Color(0x090c12);
-            scene3D.fog = new THREE.FogExp2(0x090c12, 0.45);
+            scene3D.fog = new THREE.FogExp2(0x090c12, 0.42);
 
             camera3D = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.01, 100);
             camera3D.position.set(0.28, 0.22, 0.38);
@@ -1276,14 +1436,15 @@
             const hemiLight = new THREE.HemisphereLight(0xffffff, 0x1e293b, AJUSTES_3D.entorno * 2.2);
             scene3D.add(hemiLight);
 
+            // Luz principal frontal-superior proyectando la sombra de la caja contra la pared
             const dirLight = new THREE.DirectionalLight(0xffffff, AJUSTES_3D.luzDirecta * 2.8);
-            dirLight.position.set(0.6, 1.2, 0.8);
+            dirLight.position.set(0.55, 0.95, 1.15);
             dirLight.castShadow = true;
             dirLight.shadow.mapSize.width = 2048;
             dirLight.shadow.mapSize.height = 2048;
             dirLight.shadow.camera.near = 0.05;
             dirLight.shadow.camera.far = 4.0;
-            const d = 0.35;
+            const d = 0.45;
             dirLight.shadow.camera.left = -d;
             dirLight.shadow.camera.right = d;
             dirLight.shadow.camera.top = d;
@@ -1293,16 +1454,16 @@
             scene3D.add(dirLight);
 
             const fillLight = new THREE.DirectionalLight(0xdbeafe, AJUSTES_3D.luzDirecta * 1.1);
-            fillLight.position.set(-1.2, 0.4, -1.0);
+            fillLight.position.set(-1.1, 0.3, 0.8);
             scene3D.add(fillLight);
 
-            const rimLight = new THREE.SpotLight(0xffc500, 1.4);
-            rimLight.position.set(0, 0.5, -0.8);
+            const rimLight = new THREE.SpotLight(0xffc500, 1.3);
+            rimLight.position.set(0.8, 0.7, 0.3);
             scene3D.add(rimLight);
 
-            // Texturas procedurales en memoria para plástico ABS y componentes
             const texturaABS = crearTexturaMicroRugosa(34, 18);
             const texturaComponentes = crearTexturaMicroRugosa(18, 10);
+            const texturaPared = crearTexturaMicroRugosa(42, 26);
 
             function procesarEscenaGLTF(gltf) {
                 const root = gltf.scene;
@@ -1320,17 +1481,14 @@
                             }
 
                             const clavePieza = detectarClaveSensorDesdeObjeto3D(child);
-                            const esCarcasa = !clavePieza;
 
-                            if (esCarcasa) {
-                                // Textura granulada mate de polímero ABS industrial para la caja estanca
+                            if (clavePieza === 'caja' || !clavePieza) {
                                 child.material.bumpMap = texturaABS;
                                 child.material.bumpScale = 0.0012;
                                 child.material.roughnessMap = texturaABS;
                                 child.material.roughness = 0.68;
                                 child.material.metalness = 0.06;
                             } else {
-                                // Textura sutil de alta definición para sensores, PCB y batería
                                 child.material.bumpMap = texturaComponentes;
                                 child.material.bumpScale = 0.0004;
                                 if (child.material.metalness !== undefined) {
@@ -1348,6 +1506,16 @@
                 scene3D.add(root);
                 root.updateMatrixWorld(true);
 
+                // Calcular caja delimitadora antes de mover la tapa para posicionar la pared y los tornillos
+                const boxInicial = new THREE.Box3().setFromObject(root);
+                const center = boxInicial.getCenter(new THREE.Vector3());
+                const size = boxInicial.getSize(new THREE.Vector3());
+                const maxDim = Math.max(size.x, size.y, size.z) || 0.25;
+
+                // Construir pared y los 4 soportes atornillados detrás de la caja estanca
+                const paredMontaje = crearParedYMontaje(boxInicial, texturaPared);
+                scene3D.add(paredMontaje);
+
                 pivoteTapa3D = new THREE.Group();
                 pivoteTapa3D.position.set(
                     AJUSTES_3D.PIVOTE.x,
@@ -1363,27 +1531,14 @@
                     }
                 });
 
-                const box = new THREE.Box3().setFromObject(root);
-                const center = box.getCenter(new THREE.Vector3());
-                const size = box.getSize(new THREE.Vector3());
-                const maxDim = Math.max(size.x, size.y, size.z) || 0.25;
-
-                const pisoGeom = new THREE.PlaneGeometry(maxDim * 8, maxDim * 8);
-                const pisoMat = new THREE.ShadowMaterial({ opacity: 0.45 });
-                const pisoSombra = new THREE.Mesh(pisoGeom, pisoMat);
-                pisoSombra.rotation.x = -Math.PI / 2;
-                pisoSombra.position.y = box.min.y - 0.002;
-                pisoSombra.receiveShadow = true;
-                scene3D.add(pisoSombra);
-
                 controls3D.target.copy(center);
                 camera3D.position.set(
-                    center.x + maxDim * 1.15,
-                    center.y + maxDim * 0.75,
-                    center.z + maxDim * 1.55
+                    center.x + maxDim * 1.1,
+                    center.y + maxDim * 0.65,
+                    center.z + maxDim * 1.65
                 );
-                controls3D.minDistance = maxDim * 0.4;
-                controls3D.maxDistance = maxDim * 6.0;
+                controls3D.minDistance = maxDim * 0.45;
+                controls3D.maxDistance = maxDim * 5.0;
                 controls3D.update();
 
                 defaultCameraPosition = camera3D.position.clone();
@@ -1431,12 +1586,16 @@
 
                 const intersects = raycaster.intersectObjects(objetosRaycast, true);
                 if (intersects.length > 0) {
+                    // Priorizar un sensor o batería si el rayo toca ambos, y si toca solo la carcasa elegir 'caja'
                     let claveElegida = null;
                     for (let i = 0; i < intersects.length; i++) {
                         const c = detectarClaveSensorDesdeObjeto3D(intersects[i].object);
-                        if (c) {
+                        if (c && c !== 'caja') {
                             claveElegida = c;
                             break;
+                        }
+                        if (!claveElegida && c === 'caja') {
+                            claveElegida = 'caja';
                         }
                     }
                     if (claveElegida) {
@@ -1457,8 +1616,8 @@
                 if (modeloRaiz3D) objetosRaycast.push(modeloRaiz3D);
 
                 const intersects = raycaster.intersectObjects(objetosRaycast, true);
-                const sobreSensorClickeable = intersects.some(hit => detectarClaveSensorDesdeObjeto3D(hit.object) !== null);
-                renderer3D.domElement.style.cursor = sobreSensorClickeable ? 'pointer' : 'grab';
+                const sobrePiezaClickeable = intersects.some(hit => detectarClaveSensorDesdeObjeto3D(hit.object) !== null);
+                renderer3D.domElement.style.cursor = sobrePiezaClickeable ? 'pointer' : 'grab';
 
                 if (abrirConMouseActivo) {
                     if (intersects.length > 0) {
