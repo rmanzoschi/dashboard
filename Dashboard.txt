@@ -1,0 +1,332 @@
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <DHT.h>
+#include <BH1750.h>
+#include <driver/i2s.h>
+#include <math.h>
+
+// ==========================================
+// 1. DISTRIBUCIÓN DEFINITIVA DE PINES
+// ==========================================
+#define DHTPIN 10
+#define DHTTYPE DHT22
+#define I2C_SDA 8
+#define I2C_SCL 9
+#define PIN_PIR 3
+#define PIN_MQ135_AO 0
+#define PIN_MQ135_DO 7
+
+#define I2S_SCK 4
+#define I2S_WS 5
+#define I2S_SD 6
+#define I2S_PORT I2S_NUM_0
+
+// ==========================================
+// 2. CONFIGURACIÓN WI-FI Y MQTT
+// ==========================================
+const char* ssid = "LABO";
+const char* password = "12345678";
+
+const char* mqtt_server = "192.168.101.94";
+const int mqtt_port = 1883;
+const char* mqtt_user = "alumno";
+const char* mqtt_pass = "1234";
+
+// Tópicos sincronizados con el Dashboard y el Broker
+const char* topic_temp    = "6to_info/A/G4/temperatura";
+const char* topic_hum     = "6to_info/A/G4/humedad";
+const char* topic_pres    = "6to_info/A/G4/presencia";
+const char* topic_luz     = "6to_info/A/G4/luz";
+const char* topic_ruido   = "6to_info/A/G4/ruido";
+const char* topic_gases   = "6to_info/A/G4/gases";
+const char* topic_confort = "6to_info/A/G4/confort";
+
+// ==========================================
+// 3. OBJETOS Y VARIABLES DE ESTADO
+// ==========================================
+WiFiClient espClient;
+PubSubClient client(espClient);
+DHT dht(DHTPIN, DHTTYPE);
+BH1750 bh1750; // Objeto BH1750 con tu configuración probada
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+bool bhOk = false;
+bool i2sOk = false;
+
+// Variables de telemetría
+float tempVal = 0.0;
+float humVal = 0.0;
+bool dhtError = true;
+float luxVal = 0.0;
+float ruidoDb = 35.0;
+int gasVal = 0;
+bool movimientoDetectado = false;
+String estadoConfort = "CALCULANDO";
+
+// Temporizadores NO BLOQUEANTES (millis)
+unsigned long lastSensorRead = 0;
+unsigned long lastLcdUpdate = 0;
+unsigned long lastMqttPublish = 0;
+unsigned long lastWiFiRetry = 0;
+unsigned long lastMqttRetry = 0;
+int pantallaActual = 0; // Para rotar la info en el LCD 16x2
+
+// ==========================================
+// 4. INICIALIZACIÓN DE MICRÓFONO I2S
+// ==========================================
+void setupI2S() {
+  i2s_config_t i2s_config = {
+    .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX),
+    .sample_rate = 16000,
+    .bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT,
+    .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
+    .communication_format = I2S_COMM_FORMAT_STAND_I2S,
+    .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
+    .dma_buf_count = 4,
+    .dma_buf_len = 256,
+    .use_apll = false,
+    .tx_desc_auto_clear = false,
+    .fixed_mclk = 0
+  };
+  i2s_pin_config_t pin_config = {
+    .bck_io_num = I2S_SCK,
+    .ws_io_num = I2S_WS,
+    .data_out_num = I2S_PIN_NO_CHANGE,
+    .data_in_num = I2S_SD
+  };
+  if (i2s_driver_install(I2S_PORT, &i2s_config, 0, NULL) == ESP_OK) {
+    if (i2s_set_pin(I2S_PORT, &pin_config) == ESP_OK) {
+      i2sOk = true;
+    }
+  }
+}
+
+// Lectura segura de Ruido por I2S
+float medirRuidoDB() {
+  if (!i2sOk) return 35.0;
+  int32_t samples[128];
+  size_t bytesRead = 0;
+  
+  esp_err_t err = i2s_read(I2S_PORT, &samples, sizeof(samples), &bytesRead, 10);
+  if (err != ESP_OK || bytesRead == 0) return ruidoDb;
+
+  int numSamples = bytesRead / sizeof(int32_t);
+  double sumSquares = 0;
+  for (int i = 0; i < numSamples; i++) {
+    int32_t sample = samples[i] >> 8;
+    sumSquares += (double)sample * (double)sample;
+  }
+  double rms = sqrt(sumSquares / numSamples);
+  if (rms <= 1.0) rms = 1.0;
+
+  float db = 20.0 * log10(rms) - 65.0;
+  if (db < 30.0) db = 30.0;
+  if (db > 100.0) db = 100.0;
+  return db;
+}
+
+// ==========================================
+// 5. SETUP PRINCIPAL
+// ==========================================
+void setup() {
+  Serial.begin(115200);
+  
+  pinMode(PIN_PIR, INPUT);
+  pinMode(PIN_MQ135_DO, INPUT);
+  analogReadResolution(12);
+
+  // Iniciar Bus I2C compartido (GPIO 8 = SDA, GPIO 9 = SCL)
+  Wire.begin(I2C_SDA, I2C_SCL);
+
+  // Iniciar LCD
+  lcd.init();
+  lcd.backlight();
+  lcd.setCursor(0, 0);
+  lcd.print("Nodo G4 Iniciando");
+  lcd.setCursor(0, 1);
+  lcd.print("Modo Autonomo OK");
+
+  // Iniciar Sensores
+  dht.begin();
+  
+  // Inicialización de tu BH1750 comprobada
+  if (bh1750.begin(BH1750::CONTINUOUS_HIGH_RES_MODE, 0x23, &Wire)) {
+    bhOk = true;
+    Serial.println("[OK] BH1750 iniciado correctamente en 0x23.");
+  } else {
+    Serial.println("[FALLO] BH1750 no responde en 0x23.");
+  }
+
+  setupI2S();
+
+  // Configurar Wi-Fi y MQTT sin bloquear el arranque
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  client.setServer(mqtt_server, mqtt_port);
+  
+  Serial.println("[SISTEMA] Arranque completado. Ejecutando loop autonomo...");
+}
+
+// ==========================================
+// 6. LECTURA DE SENSORES Y CÁLCULO DE CONFORT
+// ==========================================
+void leerSensores() {
+  // 1. DHT22
+  float t = dht.readTemperature();
+  float h = dht.readHumidity();
+  if (!isnan(t) && !isnan(h)) {
+    tempVal = t;
+    humVal = h;
+    dhtError = false;
+  } else {
+    dhtError = true;
+  }
+
+  // 2. BH1750 (Reintenta si falló al inicio)
+  if (!bhOk) {
+    if (bh1750.begin(BH1750::CONTINUOUS_HIGH_RES_MODE, 0x23, &Wire)) bhOk = true;
+  }
+  if (bhOk) {
+    float l = bh1750.readLightLevel();
+    if (l >= 0) luxVal = l;
+  } else {
+    luxVal = -1.0;
+  }
+
+  // 3. MQ-135
+  long sumaGas = 0;
+  for (int i = 0; i < 5; i++) {
+    sumaGas += analogRead(PIN_MQ135_AO);
+  }
+  gasVal = sumaGas / 5;
+
+  // 4. PIR (Movimiento)
+  movimientoDetectado = (digitalRead(PIN_PIR) == HIGH);
+
+  // 5. INMP441 (Ruido)
+  ruidoDb = medirRuidoDB();
+
+  // 6. Cálculo de Confort (Sistema de Puntuación)
+  int puntos = 5;
+  if (!dhtError) {
+    if (tempVal < 18.0 || tempVal > 28.0) puntos -= 2;
+    else if (tempVal < 20.0 || tempVal > 25.0) puntos -= 1;
+
+    if (humVal < 30.0 || humVal > 70.0) puntos -= 1;
+  }
+  if (bhOk && luxVal < 250.0) puntos -= 1;
+  if (ruidoDb > 75.0) puntos -= 1;
+  if (gasVal > 1800) puntos -= 1;
+
+  if (puntos >= 4) estadoConfort = "Confortable";
+  else if (puntos >= 2) estadoConfort = "Regular";
+  else estadoConfort = "Malo";
+}
+
+// ==========================================
+// 7. ACTUALIZACIÓN DE PANTALLA LCD (AUTÓNOMA)
+// ==========================================
+void actualizarLCD() {
+  lcd.clear();
+  if (pantallaActual == 0) {
+    lcd.setCursor(0, 0);
+    if (dhtError) {
+      lcd.print("T:ERR   H:ERR");
+    } else {
+      lcd.print("T:"); lcd.print(tempVal, 1); lcd.print("C ");
+      lcd.print("H:"); lcd.print(humVal, 0); lcd.print("%");
+    }
+    lcd.setCursor(0, 1);
+    lcd.print("Luz:");
+    if (bhOk && luxVal >= 0) { lcd.print((int)luxVal); lcd.print("lx"); }
+    else { lcd.print("ERR"); }
+    lcd.print(" PIR:"); lcd.print(movimientoDetectado ? "SI" : "NO");
+  } 
+  else {
+    lcd.setCursor(0, 0);
+    lcd.print("Gas:"); lcd.print(gasVal);
+    lcd.print(" R:"); lcd.print((int)ruidoDb); lcd.print("dB");
+    lcd.setCursor(0, 1);
+    lcd.print("Est:"); lcd.print(estadoConfort);
+  }
+  pantallaActual = (pantallaActual + 1) % 2;
+}
+
+// ==========================================
+// 8. GESTIÓN NO BLOQUEANTE DE CONECTIVIDAD
+// ==========================================
+void gestionarConectividad(unsigned long now) {
+  if (WiFi.status() != WL_CONNECTED) {
+    if (now - lastWiFiRetry >= 10000) {
+      lastWiFiRetry = now;
+      Serial.println("[WIFI] Sin conexion. Reintentando en segundo plano...");
+      WiFi.disconnect();
+      WiFi.begin(ssid, password);
+    }
+    return;
+  }
+
+  if (!client.connected()) {
+    if (now - lastMqttRetry >= 5000) {
+      lastMqttRetry = now;
+      Serial.print("[MQTT] Intentando conectar al broker... ");
+      String clientId = "ESP32C3_G4_" + String(random(0xffff), HEX);
+      if (client.connect(clientId.c_str(), mqtt_user, mqtt_pass)) {
+        Serial.println("CONECTADO!");
+      } else {
+        Serial.print("Fallo (rc=");
+        Serial.print(client.state());
+        Serial.println("). El nodo sigue funcionando en modo autonomo.");
+      }
+    }
+  } else {
+    client.loop();
+  }
+}
+
+// ==========================================
+// 9. LOOP PRINCIPAL
+// ==========================================
+void loop() {
+  unsigned long now = millis();
+
+  // A. Leer sensores cada 2 segundos
+  if (now - lastSensorRead >= 2000) {
+    lastSensorRead = now;
+    leerSensores();
+    
+    Serial.printf("[AUTONOMO] T:%.1fC | H:%.1f%% | Luz:%.0flx | Gas:%d | Ruido:%.0fdB | PIR:%s | Conf:%s\n",
+                  dhtError ? -1.0 : tempVal,
+                  dhtError ? -1.0 : humVal,
+                  luxVal, gasVal, ruidoDb,
+                  movimientoDetectado ? "SI" : "NO",
+                  estadoConfort.c_str());
+  }
+
+  // B. Rotar pantalla LCD cada 3 segundos
+  if (now - lastLcdUpdate >= 3000) {
+    lastLcdUpdate = now;
+    actualizarLCD();
+  }
+
+  // C. Gestionar Wi-Fi y MQTT en segundo plano
+  gestionarConectividad(now);
+
+  // D. Publicar por MQTT cada 5 segundos
+  if (client.connected() && (now - lastMqttPublish >= 5000)) {
+    lastMqttPublish = now;
+
+    client.publish(topic_temp, dhtError ? "ERROR" : String(tempVal, 1).c_str());
+    client.publish(topic_hum, dhtError ? "ERROR" : String(humVal, 1).c_str());
+    client.publish(topic_luz, (bhOk && luxVal >= 0) ? String((int)luxVal).c_str() : "ERROR");
+    client.publish(topic_ruido, String((int)ruidoDb).c_str());
+    client.publish(topic_gases, String(gasVal).c_str());
+    client.publish(topic_pres, movimientoDetectado ? "SI" : "NO");
+    client.publish(topic_confort, estadoConfort.c_str());
+
+    Serial.println("[MQTT] Paquete de telemetria enviado al broker.");
+  }
+}
+```[cite: 1]

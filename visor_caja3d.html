@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nodo de confort · Caja 3D</title>
+<style>
+  :root { --bg:#0d0d10; --panel:rgba(22,22,27,.92); --gold:#d4af37; --text:#ece7d8; --muted:#8d8a80; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; background:radial-gradient(ellipse at 50% 35%, #1d1d24 0%, var(--bg) 70%); color:var(--text);
+               font-family:system-ui, "Segoe UI", Roboto, sans-serif; overflow:hidden; }
+  #app { position:relative; width:100%; height:100%; min-height:380px; }
+  canvas { width:100%; height:100%; display:block; touch-action:none; }
+  .toolbar { position:absolute; top:12px; left:12px; right:12px; display:flex; flex-wrap:wrap; gap:8px; z-index:5; }
+  button { background:var(--panel); color:var(--gold); border:1px solid rgba(212,175,55,.45); padding:8px 12px; border-radius:8px;
+           cursor:pointer; font:600 13px system-ui, sans-serif; }
+  button:hover { background:rgba(212,175,55,.16); }
+  button.on { background:var(--gold); color:#14120a; }
+  .sep { flex:1 1 auto; }
+  .pill { align-self:center; font-size:12px; color:var(--muted); background:var(--panel); border:1px solid rgba(255,255,255,.08);
+          padding:6px 10px; border-radius:999px; }
+  .pill i { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--gold); margin-right:6px; }
+  .label { position:absolute; left:0; top:0; transform:translate(-50%,-115%); background:var(--panel); border:1px solid rgba(212,175,55,.6);
+           border-radius:8px; padding:4px 9px; font-size:12px; white-space:nowrap; cursor:pointer; z-index:3; transition:opacity .15s; }
+  .label b { display:block; color:var(--gold); font-size:10px; letter-spacing:.06em; text-transform:uppercase; }
+  .label.sel { outline:2px solid var(--gold); }
+  .label.off { opacity:0; pointer-events:none; }
+  #info { position:absolute; left:12px; bottom:12px; max-width:320px; background:var(--panel); border:1px solid rgba(212,175,55,.45);
+          border-radius:12px; padding:12px 14px; z-index:5; display:none; }
+  #info h3 { margin:0 0 2px; color:var(--gold); font-size:15px; }
+  #info .tp { color:var(--muted); font-size:11px; font-family:ui-monospace, Consolas, monospace; margin-bottom:6px; word-break:break-all; }
+  #info .val { font-size:22px; font-weight:700; margin:2px 0 6px; }
+  #info p { margin:0; font-size:12px; color:#c9c4b4; line-height:1.4; }
+  #cargando { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--gold); z-index:9;
+              background:rgba(13,13,16,.8); font-size:14px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="cargando">Cargando modelo 3D…</div>
+  <div class="toolbar">
+    <button id="bTapa">Abrir tapa</button>
+    <button id="bEtiq" class="on">Etiquetas</button>
+    <button id="bRot">Auto-rotar</button>
+    <button data-vista="frente">Frente</button>
+    <button data-vista="izq">Izquierda</button>
+    <button data-vista="der">Derecha</button>
+    <button data-vista="arriba">Arriba</button>
+    <span class="sep"></span>
+    <span class="pill" id="modo"><i></i>Simulación</span>
+  </div>
+  <div id="info"><h3></h3><div class="tp"></div><div class="val"></div><p></p></div>
+</div>
+
+<!-- Para abrirlo con doble clic (file://) el modelo va embebido en este archivo; si no existe se intenta cargar el .glb -->
+<script src="modelo_glb.js"></script>
+
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const GLB_URL = 'caja_estanca_sensores_v4.glb';
+const SIMULAR = !window.CAJA3D_SIN_SIMULACION;      // ponelo en true antes de cargar el script para usar solo datos reales
+const BASE_TOPICO = '6to_info/A/G4/';
+
+// Posiciones en metros, en el sistema del modelo (centro de la caja = origen, +Z hacia el frente)
+const SENSORES = {
+  confort:     { nodo:'lcd_16x2',    titulo:'LCD 16x2',      pos:[-0.001, 0.064, 0.047], n:[0,0,1],  tapa:true,
+                 desc:'Pantalla del nodo. Muestra el índice de confort calculado por el ESP32.' },
+  presencia:   { nodo:'pir_hcsr501', titulo:'PIR HC-SR501',  pos:[0.071, 0.066, 0.056],  n:[0,0,1],  tapa:true,
+                 desc:'Sensor de movimiento infrarrojo. Detecta si hay personas en el ambiente.' },
+  gases:       { nodo:'mq135',       titulo:'MQ-135',        pos:[-0.106, 0.072, -0.006], n:[-1,0,0],
+                 desc:'Calidad del aire: detecta CO₂, amoníaco, benceno y otros gases.' },
+  temperatura: { nodo:'dht22',       titulo:'DHT22',         pos:[0.104, 0.061, -0.014],  n:[1,0,0],
+                 desc:'Temperatura y humedad relativa del ambiente.', extra:'humedad' },
+  ruido:       { nodo:'inmp441',     titulo:'INMP441',       pos:[-0.071, 0.103, -0.014], n:[0,1,0],
+                 desc:'Micrófono MEMS I²S. El ESP32 calcula el nivel de ruido a partir de su señal.' },
+  luz:         { nodo:'bh1750',      titulo:'BH1750',        pos:[0.057, 0.103, -0.014],  n:[0,1,0],
+                 desc:'Sensor de luz ambiente (lux).' },
+};
+const PARTES_TAPA = ['caja_tapa', 'lcd_16x2', 'pir_hcsr501'];   // se mueven juntas al abrir
+const num = v => { const x = parseFloat(String(v).replace(',', '.')); return Number.isFinite(x) ? x : null; };
+const FORMATO = {
+  temperatura: v => num(v) === null ? String(v) : `${num(v).toFixed(1)} °C`,
+  humedad:     v => num(v) === null ? String(v) : `${Math.round(num(v))} %`,
+  luz:         v => num(v) === null ? String(v) : `${Math.round(num(v))} lx`,
+  ruido:       v => num(v) === null ? String(v) : `${Math.round(num(v))} dB`,
+  gases:       v => num(v) === null ? String(v) : `${Math.round(num(v))}`,
+  presencia:   v => ['si','sí','1','true','on'].includes(String(v).trim().toLowerCase()) ? 'Presencia' : 'Sin presencia',
+  confort:     v => String(v),
+};
+const datos = {};
+
+// ---------- escena ----------
+const app = document.getElementById('app');
+const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+app.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;   // iluminación para que los materiales no se vean negros
+const sun = new THREE.DirectionalLight(0xffffff, 1.2); sun.position.set(0.5, 1, 1); scene.add(sun);
+
+const camera = new THREE.PerspectiveCamera(35, 1, 0.01, 10);
+camera.position.set(0.32, 0.22, 0.48);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.minDistance = 0.12; controls.maxDistance = 1.2; controls.autoRotateSpeed = 1.2;
+controls.addEventListener('start', () => { anim = null; });
+
+function resize() {
+  const w = app.clientWidth, h = app.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(app); resize();
+
+// ---------- etiquetas ----------
+const etiquetas = {};
+for (const [k, s] of Object.entries(SENSORES)) {
+  const el = document.createElement('div'); el.className = 'label';
+  el.innerHTML = `<b>${s.titulo}</b><span class="v">—</span>`;
+  el.addEventListener('click', e => { e.stopPropagation(); seleccionar(k); });
+  app.appendChild(el); etiquetas[k] = el;
+}
+function textoSensor(k) {
+  const s = SENSORES[k], v = datos[k];
+  let t = v === undefined ? '—' : FORMATO[k](v);
+  if (s.extra && datos[s.extra] !== undefined) t += ` · ${FORMATO[s.extra](datos[s.extra])}`;
+  return t;
+}
+function refrescarTextos() {
+  for (const k in SENSORES) etiquetas[k].querySelector('.v').textContent = textoSensor(k);
+  if (seleccion) document.querySelector('#info .val').textContent = textoSensor(seleccion);
+}
+
+// ---------- carga del modelo ----------
+const loader = new GLTFLoader();
+const nodos = {}, baseTapa = {};
+const nodoAClave = {};
+for (const [k, s] of Object.entries(SENSORES)) nodoAClave[s.nodo] = k;
+
+async function cargar() {
+  if (window.CAJA_GLB_B64) {
+    const bin = Uint8Array.from(atob(window.CAJA_GLB_B64), c => c.charCodeAt(0));
+    return loader.parseAsync(bin.buffer, '');
+  }
+  return loader.loadAsync(GLB_URL);
+}
+cargar().then(gltf => {
+  scene.add(gltf.scene);
+  gltf.scene.traverse(o => { if (o.name) nodos[o.name] = o; });
+  PARTES_TAPA.forEach(n => { if (nodos[n]) baseTapa[n] = nodos[n].position.clone(); });
+  document.getElementById('cargando').remove();
+}).catch(err => {
+  document.getElementById('cargando').innerHTML =
+    'No se pudo cargar el modelo.<br><small>Si abriste el archivo con doble clic, dejá <b>modelo_glb.js</b> en la misma carpeta; ' +
+    'si usás el .glb suelto, serví la carpeta con <code>python -m http.server</code>.</small>';
+  console.error(err);
+});
+
+// ---------- interacción ----------
+let lidT = 0, lidObjetivo = 0, seleccion = null, anim = null, etiquetasOn = true;
+const originales = new Map();
+
+function resaltar(k, on) {
+  const raiz = nodos[SENSORES[k].nodo]; if (!raiz) return;
+  raiz.traverse(o => {
+    if (!o.isMesh) return;
+    if (on) {
+      originales.set(o, o.material);
+      const m = o.material.clone();
+      if (m.emissive) { m.emissive = new THREE.Color(0xd4af37); m.emissiveIntensity = 0.45; }
+      o.material = m;
+    } else if (originales.has(o)) { o.material = originales.get(o); originales.delete(o); }
+  });
+}
+function irA(pos, objetivo) { anim = { p:new THREE.Vector3(...pos), t:new THREE.Vector3(...objetivo) }; }
+function seleccionar(k) {
+  if (seleccion) resaltar(seleccion, false);
+  seleccion = k;
+  const info = document.getElementById('info');
+  if (!k) { info.style.display = 'none'; Object.values(etiquetas).forEach(e => e.classList.remove('sel')); return; }
+  const s = SENSORES[k];
+  Object.entries(etiquetas).forEach(([kk, e]) => e.classList.toggle('sel', kk === k));
+  resaltar(k, true);
+  info.style.display = 'block';
+  info.querySelector('h3').textContent = s.titulo;
+  info.querySelector('.tp').textContent = BASE_TOPICO + k + (s.extra ? ` · ${BASE_TOPICO}${s.extra}` : '');
+  info.querySelector('.val').textContent = textoSensor(k);
+  info.querySelector('p').textContent = s.desc;
+  const off = s.tapa ? lidT * 0.2 : 0;
+  const p = [s.pos[0], s.pos[1], s.pos[2] + off];
+  const d = 0.3;
+  irA([p[0] + s.n[0]*d, p[1] + s.n[1]*d + (s.n[1] ? 0 : 0.04), p[2] + s.n[2]*d + (s.n[1] ? 0.12 : 0)], p);
+}
+const VISTAS = { frente:[[0,0.02,0.5],[0,0,0]], izq:[[-0.5,0.02,0.04],[0,0,0]], der:[[0.5,0.02,0.04],[0,0,0]], arriba:[[0,0.52,0.1],[0,0,0]] };
+document.querySelectorAll('[data-vista]').forEach(b => b.addEventListener('click', () => { const v = VISTAS[b.dataset.vista]; irA(v[0], v[1]); }));
+document.getElementById('bTapa').addEventListener('click', e => {
+  lidObjetivo = lidObjetivo ? 0 : 1; e.currentTarget.classList.toggle('on', !!lidObjetivo);
+  e.currentTarget.textContent = lidObjetivo ? 'Cerrar tapa' : 'Abrir tapa';
+});
+document.getElementById('bEtiq').addEventListener('click', e => { etiquetasOn = !etiquetasOn; e.currentTarget.classList.toggle('on', etiquetasOn); });
+document.getElementById('bRot').addEventListener('click', e => { controls.autoRotate = !controls.autoRotate; e.currentTarget.classList.toggle('on', controls.autoRotate); });
+
+// clic sobre el modelo (ignora arrastres)
+const ray = new THREE.Raycaster(), ptr = new THREE.Vector2(); let down = null;
+renderer.domElement.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ptr, camera);
+  const hit = ray.intersectObjects(scene.children, true)[0];
+  let o = hit && hit.object, k = null;
+  while (o && !k) { k = nodoAClave[o.name] || null; o = o.parent; }
+  seleccionar(k);
+});
+
+// ---------- bucle ----------
+const tmp = new THREE.Vector3(), anchor = new THREE.Vector3(), nrm = new THREE.Vector3();
+function frame() {
+  requestAnimationFrame(frame);
+  lidT += (lidObjetivo - lidT) * 0.12;
+  PARTES_TAPA.forEach(n => { if (nodos[n] && baseTapa[n]) nodos[n].position.z = baseTapa[n].z + lidT * 0.2; });
+  if (anim) {
+    camera.position.lerp(anim.p, 0.08); controls.target.lerp(anim.t, 0.08);
+    if (camera.position.distanceTo(anim.p) < 0.002) anim = null;
+  }
+  controls.update();
+  renderer.render(scene, camera);
+  const w = app.clientWidth, h = app.clientHeight;
+  for (const [k, s] of Object.entries(SENSORES)) {
+    const el = etiquetas[k];
+    nrm.set(...s.n);
+    anchor.set(...s.pos).addScaledVector(nrm, 0.012);
+    if (s.tapa) anchor.z += lidT * 0.2;
+    const mirando = tmp.copy(camera.position).sub(anchor).dot(nrm) > 0;
+    const p = anchor.clone().project(camera);
+    el.classList.toggle('off', !etiquetasOn || !mirando || p.z > 1);
+    el.style.left = ((p.x * 0.5 + 0.5) * w) + 'px';
+    el.style.top = ((-p.y * 0.5 + 0.5) * h) + 'px';
+  }
+}
+frame();
+
+// ---------- API para el dashboard ----------
+let simTimer = null;
+function actualizar(nuevos, enVivo = true) {
+  Object.assign(datos, nuevos);
+  refrescarTextos();
+  if (enVivo) {                                   // al llegar datos reales se apaga la simulación interna
+    if (simTimer) { clearInterval(simTimer); simTimer = null; }
+    document.getElementById('modo').innerHTML = '<i></i>En vivo';
+  }
+}
+window.Caja3D = { actualizar, seleccionar, vista: n => { const v = VISTAS[n]; if (v) irA(v[0], v[1]); },
+                  abrirTapa: abrir => { lidObjetivo = abrir ? 1 : 0; } };
+// desde un iframe: parent.postMessage({tipo:'caja3d', datos:{temperatura:25, ...}}, '*')
+window.addEventListener('message', e => { if (e.data && e.data.tipo === 'caja3d') actualizar(e.data.datos || {}); });
+
+// ---------- simulación (para probar sin ESP32) ----------
+if (SIMULAR) {
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const sim = () => actualizar({
+    temperatura: rnd(22, 28), humedad: rnd(40, 70), luz: rnd(80, 400), ruido: rnd(35, 65), gases: rnd(300, 900),
+    presencia: Math.random() > 0.4 ? 'si' : 'no', confort: ['OK', 'ACEPTABLE', 'NO CONFORTABLE'][Math.floor(Math.random() * 3)]
+  }, false);
+  sim(); simTimer = setInterval(sim, 3000);
+} else { document.getElementById('modo').innerHTML = '<i></i>Esperando datos…'; }
+</script>
+</body>
+</html>
