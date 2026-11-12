@@ -848,6 +848,7 @@
                 <div class="sensor-chips-bar">
                     <span class="sensor-chips-label"><i class="ph-bold ph-cpu"></i> Inspeccionar Hardware:</span>
                     <button class="sensor-chip" data-sensor="esp32" onclick="seleccionarComponentePorClave('esp32')"><i class="ph-bold ph-cpu"></i> ESP32-C3 Mini</button>
+                    <button class="sensor-chip" data-sensor="bateria" onclick="seleccionarComponentePorClave('bateria')"><i class="ph-bold ph-battery-charging"></i> Batería</button>
                     <button class="sensor-chip" data-sensor="dht22" onclick="seleccionarComponentePorClave('dht22')"><i class="ph-bold ph-thermometer"></i> DHT22</button>
                     <button class="sensor-chip" data-sensor="bh1750" onclick="seleccionarComponentePorClave('bh1750')"><i class="ph-bold ph-sun"></i> BH1750</button>
                     <button class="sensor-chip" data-sensor="mq135" onclick="seleccionarComponentePorClave('mq135')"><i class="ph-bold ph-wind"></i> MQ-135</button>
@@ -960,16 +961,27 @@
         // ==========================================
         // CATÁLOGO DE SENSORES Y LINKS A DATASHEETS OFICIALES
         // ==========================================
+        // ==========================================
+        // CATÁLOGO DE SENSORES Y BATERÍA (SIN CAJA ESTANCA)
+        // ==========================================
         const CATALOGO_SENSORES_3D = {
             esp32: {
                 titulo: "ESP32-C3 SuperMini",
                 categoria: "Microcontrolador Wi-Fi / BLE",
-                descripcion: "Cerebro del Nodo G4 basado en arquitectura RISC-V de 32 bits (160 MHz). Procesa las lecturas de los 5 sensores en tiempo real sin bloqueos, controla el LCD autónomo y transmite los paquetes por protocolo MQTT mediante Wi-Fi 2.4 GHz.",
+                descripcion: "Cerebro del Nodo G4 basado en arquitectura RISC-V de 32 bits (160 MHz). Procesa las lecturas de los sensores en tiempo real sin bloqueos, controla el LCD autónomo y transmite los paquetes por protocolo MQTT mediante Wi-Fi 2.4 GHz.",
                 pines: "I2C (GPIO 8/9) | I2S (GPIO 4/5/6) | ADC (GPIO 0)",
                 alimentacion: "5V vía USB-C / Regulador interno 3.3V",
                 requiereAbrirTapa: true,
-                keywords: ["esp32", "supermini", "mcu", "placa", "board", "c3", "usb"],
                 datasheet: "https://www.espressif.com/sites/default/files/documentation/esp32-c3_datasheet_en.pdf"
+            },
+            bateria: {
+                titulo: "Batería Recargable Li-Ion 18650 / Sistema de Energía",
+                categoria: "Alimentación Autónoma",
+                descripcion: "Fuente de energía integrada que permite al Nodo G4 operar de forma autónoma y portátil sin depender de un tomacorriente fijo, alimentando el bus de 5V/3.3V para el ESP32-C3, la pantalla LCD y los sensores ambientales.",
+                pines: "Bus de Alimentación: VIN (5V) / 3.3V y GND común",
+                alimentacion: "3.7V nominal (4.2V carga máx.) / Etapa Step-Up 5V",
+                requiereAbrirTapa: true,
+                datasheet: "https://www.ineltro.ch/media/downloads/SAAItem/45/45958/36e3e7f3-2049-4adb-a2a7-79c654d92915.pdf"
             },
             dht22: {
                 titulo: "Sensor Digital DHT22 (AM2302)",
@@ -978,7 +990,6 @@
                 pines: "Datos: GPIO 10 (Protocolo One-Wire)",
                 alimentacion: "3.3V - 5V DC",
                 requiereAbrirTapa: false,
-                keywords: ["dht", "dht22", "am2302", "temp", "hum"],
                 datasheet: "https://www.sparkfun.com/datasheets/Sensors/Temperature/DHT22.pdf"
             },
             bh1750: {
@@ -988,7 +999,6 @@
                 pines: "Bus I2C: SDA (GPIO 8) | SCL (GPIO 9) — Dir: 0x23",
                 alimentacion: "3.3V DC",
                 requiereAbrirTapa: false,
-                keywords: ["bh1750", "gy30", "gy-30", "lux", "luz", "light"],
                 datasheet: "https://www.mouser.com/datasheet/2/348/bh1750fvi-e-186247.pdf"
             },
             mq135: {
@@ -998,7 +1008,6 @@
                 pines: "Analógico AO: GPIO 0 | Digital DO: GPIO 7",
                 alimentacion: "5V DC (Calefactor interno SnO2)",
                 requiereAbrirTapa: false,
-                keywords: ["mq135", "mq-135", "mq", "gas", "aire"],
                 datasheet: "https://www.olimex.com/Products/Components/Sensors/Gas/SNS-MQ135/resources/SNS-MQ135.pdf"
             },
             inmp441: {
@@ -1008,7 +1017,6 @@
                 pines: "Bus I2S: SCK (GPIO 4) | WS (GPIO 5) | SD (GPIO 6)",
                 alimentacion: "3.3V DC (Consumo 1.4 mA)",
                 requiereAbrirTapa: false,
-                keywords: ["inmp441", "inmp", "mic", "ruido", "audio", "i2s"],
                 datasheet: "https://invensense.tdk.com/wp-content/uploads/2015/02/INMP441.pdf"
             },
             pir: {
@@ -1018,7 +1026,6 @@
                 pines: "Salida Digital OUT: GPIO 3",
                 alimentacion: "5V DC",
                 requiereAbrirTapa: false,
-                keywords: ["pir", "hcsr501", "hc-sr501", "sr501", "movimiento", "presencia"],
                 datasheet: "https://www.mpja.com/download/31227sc.pdf"
             },
             lcd: {
@@ -1028,18 +1035,7 @@
                 pines: "Bus I2C: SDA (GPIO 8) | SCL (GPIO 9) — Dir: 0x27",
                 alimentacion: "5V DC",
                 requiereAbrirTapa: false,
-                keywords: ["lcd", "16x2", "display", "pantalla", "pcf8574"],
                 datasheet: "https://www.sparkfun.com/datasheets/LCD/HD44780.pdf"
-            },
-            caja: {
-                titulo: "Gabinete Estanco IP65 Mecanizado",
-                categoria: "Estructura y Protección Física",
-                descripcion: "Caja estanca industrial de polímero ABS resistente a impactos y polvo. Alberga el circuito impreso, el cableado interno y cuenta con calados a medida para las lentes y rejillas de ventilación de los sensores ambientales.",
-                pines: "Montaje en Tapa: LCD 16x2 + PIR | Base: ESP32-C3 + Sensores",
-                alimentacion: "Aislación eléctrica clase II",
-                requiereAbrirTapa: false,
-                keywords: ["caja_tapa", "caja_base", "caja", "gabinete", "estanca"],
-                datasheet: "https://www.iec.ch/ip-ratings"
             }
         };
 
@@ -1069,12 +1065,12 @@
         let fallasSensoresEmitidas = { temp: false, hum: false, luz: false, ruido: false, gas: false, pres: false };
 
         // ==========================================
-        // AJUSTES DEL VISOR 3D (PARÁMETROS DE CLAUDE)
+        // AJUSTES DEL VISOR 3D
         // ==========================================
         const AJUSTES_3D = {
-            exposicion: 0.75,
-            entorno: 0.5,
-            luzDirecta: 0.85,
+            exposicion: 0.78,
+            entorno: 0.55,
+            luzDirecta: 0.9,
             brilloMateriales: 0.92,
             ANGULO_APERTURA: -Math.PI,
             PIVOTE: { x: 0, y: 0.105, z: 0.024 }
@@ -1118,13 +1114,46 @@
         });
 
         // ==========================================
-        // IDENTIFICADOR INTELIGENTE DE NODOS 3D -> SENSOR
+        // GENERADOR DE TEXTURA PROCEDURAL (MICRO-RUGOSIDAD ABS / PCB)
+        // ==========================================
+        function crearTexturaMicroRugosa(intensidad = 28, repeticiones = 14) {
+            const size = 256;
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            const imgData = ctx.createImageData(size, size);
+            const data = imgData.data;
+
+            for (let i = 0; i < data.length; i += 4) {
+                const base = 128 + (Math.random() - 0.5) * intensidad;
+                data[i] = base;
+                data[i + 1] = base;
+                data[i + 2] = base;
+                data[i + 3] = 255;
+            }
+            ctx.putImageData(imgData, 0, 0);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            texture.repeat.set(repeticiones, repeticiones);
+            return texture;
+        }
+
+        // ==========================================
+        // IDENTIFICADOR DE COMPONENTES 3D (CON BATERÍA Y SIN CAJA)
         // ==========================================
         function detectarClaveSensorDesdeObjeto3D(obj) {
             let actual = obj;
             while (actual) {
                 const nombre = (actual.name || "").toLowerCase();
                 if (nombre) {
+                    // Ignorar explícitamente la caja estanca para que no sea clickeable ni tenga datasheet
+                    if (nombre === "caja_tapa" || nombre === "caja_base" || nombre === "caja" || nombre === "gabinete") {
+                        return null;
+                    }
+                    if (nombre.includes("bat") || nombre.includes("18650") || nombre.includes("lipo") || nombre.includes("pila") || nombre.includes("power") || nombre.includes("porta") || nombre.includes("celda") || nombre.includes("tp4056")) return "bateria";
                     if (nombre.includes("lcd") || nombre.includes("16x2") || nombre.includes("display")) return "lcd";
                     if (nombre.includes("pir") || nombre.includes("sr501") || nombre.includes("fresnel")) return "pir";
                     if (nombre.includes("dht") || nombre.includes("am2302")) return "dht22";
@@ -1132,7 +1161,6 @@
                     if (nombre.includes("mq135") || nombre.includes("mq_135") || nombre.includes("mq") || nombre.includes("gas")) return "mq135";
                     if (nombre.includes("inmp") || nombre.includes("441") || nombre.includes("mic") || nombre.includes("i2s")) return "inmp441";
                     if (nombre.includes("esp32") || nombre.includes("c3") || nombre.includes("supermini") || nombre.includes("mcu") || nombre.includes("usb")) return "esp32";
-                    if (nombre.includes("caja_tapa") || nombre.includes("caja_base") || nombre.includes("caja")) return "caja";
                 }
                 actual = actual.parent;
             }
@@ -1180,20 +1208,17 @@
             const info = CATALOGO_SENSORES_3D[claveSensor];
             if (!info) return;
 
-            // Si el usuario selecciona el ESP32 interno y la tapa está cerrada, abrirla automáticamente
+            // Si es un componente interno (ESP32 o Batería) y la tapa está cerrada, abrirla sola
             if (info.requiereAbrirTapa && aperturaDestino < 0.5) {
                 fijarEstadoTapa3D(true);
             }
 
-            // Actualizar estado visual de los chips
             document.querySelectorAll('.sensor-chip').forEach(chip => {
                 chip.classList.toggle('active', chip.getAttribute('data-sensor') === claveSensor);
             });
 
-            // Resaltar pieza en el modelo 3D
             resaltarSensorEnEscena3D(claveSensor);
 
-            // Rellenar y mostrar tarjeta flotante con descripción y link al Datasheet
             document.getElementById('info-card-badge').innerHTML = `<i class="ph-bold ph-circuitry"></i> ${info.categoria}`;
             document.getElementById('info-card-title').innerText = info.titulo;
             document.getElementById('info-card-desc').innerText = info.descripcion;
@@ -1214,7 +1239,7 @@
         }
 
         // ==========================================
-        // VISOR 3D CON PIVOTE EN BISAGRA, RAYCAST CLIC Y COLORES NATURALES
+        // VISOR 3D CON SOMBRAS SUAVES + TEXTURA FÍSICA + SENSORES/BATERÍA
         // ==========================================
         function inicializarVisor3DDirecto() {
             const container = document.getElementById('webgl-container');
@@ -1222,7 +1247,6 @@
 
             scene3D = new THREE.Scene();
             scene3D.background = new THREE.Color(0x090c12);
-            // Niebla atmosférica sutil para dar profundidad de estudio
             scene3D.fog = new THREE.FogExp2(0x090c12, 0.45);
 
             camera3D = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.01, 100);
@@ -1235,7 +1259,6 @@
             renderer3D.toneMapping = THREE.LinearToneMapping;
             renderer3D.toneMappingExposure = AJUSTES_3D.exposicion;
 
-            // 1. ACTIVAR MOTOR DE SOMBRAS SUAVES (PCFSoftShadowMap)
             renderer3D.shadowMap.enabled = true;
             renderer3D.shadowMap.type = THREE.PCFSoftShadowMap;
             renderer3D.physicallyCorrectLights = true;
@@ -1250,11 +1273,9 @@
 
             controls3D.addEventListener('start', () => { camaraAnimando = false; });
 
-            // Iluminación de estudio con proyección de sombras
             const hemiLight = new THREE.HemisphereLight(0xffffff, 0x1e293b, AJUSTES_3D.entorno * 2.2);
             scene3D.add(hemiLight);
 
-            // Luz principal (Key Light) con sombras en alta resolución (2048x2048)
             const dirLight = new THREE.DirectionalLight(0xffffff, AJUSTES_3D.luzDirecta * 2.8);
             dirLight.position.set(0.6, 1.2, 0.8);
             dirLight.castShadow = true;
@@ -1271,21 +1292,22 @@
             dirLight.shadow.normalBias = 0.02;
             scene3D.add(dirLight);
 
-            // Luz de relleno fría (Fill Light) para suavizar sombras duras adentro de la caja
             const fillLight = new THREE.DirectionalLight(0xdbeafe, AJUSTES_3D.luzDirecta * 1.1);
             fillLight.position.set(-1.2, 0.4, -1.0);
             scene3D.add(fillLight);
 
-            // Contraluz dorada sutil (Rim Light) para recortar la silueta de la caja
             const rimLight = new THREE.SpotLight(0xffc500, 1.4);
             rimLight.position.set(0, 0.5, -0.8);
             scene3D.add(rimLight);
+
+            // Texturas procedurales en memoria para plástico ABS y componentes
+            const texturaABS = crearTexturaMicroRugosa(34, 18);
+            const texturaComponentes = crearTexturaMicroRugosa(18, 10);
 
             function procesarEscenaGLTF(gltf) {
                 const root = gltf.scene;
                 modeloRaiz3D = root;
 
-                // Activar emisión y recepción de sombras en cada pieza y sensor
                 root.traverse((child) => {
                     if (child.isMesh) {
                         child.castShadow = true;
@@ -1296,11 +1318,27 @@
                             if (child.material.color) {
                                 child.material.color.multiplyScalar(AJUSTES_3D.brilloMateriales);
                             }
-                            if (child.material.metalness !== undefined) {
-                                child.material.metalness = Math.min(child.material.metalness, 0.25);
-                            }
-                            if (child.material.roughness !== undefined) {
-                                child.material.roughness = Math.max(child.material.roughness, 0.4);
+
+                            const clavePieza = detectarClaveSensorDesdeObjeto3D(child);
+                            const esCarcasa = !clavePieza;
+
+                            if (esCarcasa) {
+                                // Textura granulada mate de polímero ABS industrial para la caja estanca
+                                child.material.bumpMap = texturaABS;
+                                child.material.bumpScale = 0.0012;
+                                child.material.roughnessMap = texturaABS;
+                                child.material.roughness = 0.68;
+                                child.material.metalness = 0.06;
+                            } else {
+                                // Textura sutil de alta definición para sensores, PCB y batería
+                                child.material.bumpMap = texturaComponentes;
+                                child.material.bumpScale = 0.0004;
+                                if (child.material.metalness !== undefined) {
+                                    child.material.metalness = Math.min(child.material.metalness + 0.08, 0.35);
+                                }
+                                if (child.material.roughness !== undefined) {
+                                    child.material.roughness = Math.max(child.material.roughness, 0.35);
+                                }
                             }
                             child.material.needsUpdate = true;
                         }
@@ -1330,7 +1368,6 @@
                 const size = box.getSize(new THREE.Vector3());
                 const maxDim = Math.max(size.x, size.y, size.z) || 0.25;
 
-                // 2. PLANO RECEPTOR DE SOMBRA DE APOYO (Piso invisible con sombra suave)
                 const pisoGeom = new THREE.PlaneGeometry(maxDim * 8, maxDim * 8);
                 const pisoMat = new THREE.ShadowMaterial({ opacity: 0.45 });
                 const pisoSombra = new THREE.Mesh(pisoGeom, pisoMat);
@@ -1371,7 +1408,6 @@
                 loader.load('caja_estanca_sensores_v4.glb', procesarEscenaGLTF);
             }
 
-            // Raycaster para clic sobre sensores y hover opcional
             const raycaster = new THREE.Raycaster();
             const mouse = new THREE.Vector2();
             let pointerDownPos = { x: 0, y: 0 };
@@ -1398,11 +1434,10 @@
                     let claveElegida = null;
                     for (let i = 0; i < intersects.length; i++) {
                         const c = detectarClaveSensorDesdeObjeto3D(intersects[i].object);
-                        if (c && c !== 'caja') {
+                        if (c) {
                             claveElegida = c;
                             break;
                         }
-                        if (!claveElegida && c) claveElegida = c;
                     }
                     if (claveElegida) {
                         seleccionarComponentePorClave(claveElegida);
@@ -1422,7 +1457,8 @@
                 if (modeloRaiz3D) objetosRaycast.push(modeloRaiz3D);
 
                 const intersects = raycaster.intersectObjects(objetosRaycast, true);
-                renderer3D.domElement.style.cursor = intersects.length > 0 ? 'pointer' : 'grab';
+                const sobreSensorClickeable = intersects.some(hit => detectarClaveSensorDesdeObjeto3D(hit.object) !== null);
+                renderer3D.domElement.style.cursor = sobreSensorClickeable ? 'pointer' : 'grab';
 
                 if (abrirConMouseActivo) {
                     if (intersects.length > 0) {
