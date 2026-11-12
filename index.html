@@ -16,10 +16,11 @@
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
 
-    <!-- Librerías Three.js para el visor 3D embebido -->
+    <!-- Librerías Three.js + Carga de modelo_glb.js (Permite funcionar tanto en file:// como en GitHub Pages) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="modelo_glb.js" onerror="console.log('Modo directo GLB activo')"></script>
 
     <style>
         :root {
@@ -243,6 +244,7 @@
 
         .btn-tool { background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: 500; font-family: var(--font-body); transition: var(--transition); display: flex; align-items: center; gap: 6px; -webkit-tap-highlight-color: transparent;}
         .btn-tool:hover { background: var(--surface-hover); color: var(--text); border-color: var(--accent); }
+        .btn-tool.active-3d { border-color: var(--accent); color: var(--accent); background: rgba(255, 197, 0, 0.12); }
         .btn-tool.btn-reset:hover { border-color: var(--red); color: var(--red); }
         .btn-tool.muted i { color: var(--orange); }
 
@@ -308,6 +310,7 @@
             overflow: hidden;
             box-shadow: 0 15px 35px rgba(0,0,0,0.4);
             transition: var(--transition);
+            position: relative;
         }
         .viewer-3d-wrapper:hover {
             border-color: rgba(255, 197, 0, 0.3);
@@ -324,10 +327,11 @@
         }
         #webgl-container {
             width: 100%;
-            height: 550px;
+            height: 560px;
             display: block;
-            background: #080a0f;
+            background: radial-gradient(circle at center, #11151f 0%, #06080d 100%);
             cursor: grab;
+            position: relative;
         }
         #webgl-container:active {
             cursor: grabbing;
@@ -632,7 +636,7 @@
     </section>
 
     <!-- ==========================================
-         SECCIÓN HARDWARE 3D EMBEBIDO DIRECTO (GITHUB READY)
+         SECCIÓN HARDWARE 3D EMBEBIDO CON APERTURA DE TAPA REAL
          ========================================== -->
     <section id="modelo3d" class="section">
         <div class="container">
@@ -647,10 +651,16 @@
                         <i class="ph-fill ph-cube-focus" style="color: var(--accent); font-size: 1.5rem;"></i>
                         <div>
                             <div style="font-family: var(--font-heading); font-size: 0.95rem; font-weight: 700;">Visor Interactivo 3D (ESP32-C3 + Sensores)</div>
-                            <div style="font-size: 0.8rem; color: var(--muted);">Rotá con clic izquierdo, desplazá con clic derecho y hacé zoom con la rueda.</div>
+                            <div style="font-size: 0.8rem; color: var(--muted);">Rotá con clic izquierdo, hacé zoom con la rueda y abrí la tapa para inspeccionar el interior.</div>
                         </div>
                     </div>
-                    <div style="display: flex; gap: 8px;">
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button class="btn-tool" id="btn-abrir-tapa" onclick="toggleTapa3D()" title="Abrir o cerrar la tapa de la caja">
+                            <i class="ph-bold ph-package"></i> <span id="txt-abrir-tapa">Abrir Tapa</span>
+                        </button>
+                        <button class="btn-tool" id="btn-hover-tapa" onclick="toggleHoverTapa3D(this)" title="Abrir automáticamente al pasar el mouse sobre la caja">
+                            <i class="ph-bold ph-cursor-click"></i> <span>Abrir con el mouse</span>
+                        </button>
                         <button class="btn-tool" onclick="resetCamara3D()" title="Reiniciar cámara 3D">
                             <i class="ph-bold ph-arrows-counter-clockwise"></i> <span>Reiniciar Vista</span>
                         </button>
@@ -718,7 +728,9 @@
     <script>
         const CONFIG = {
             MODO_SIMULACION: true, 
-            BROKER_URL: 'ws://192.168.101.94:9001/mqtt', 
+            BROKER_URL: 'ws://192.168.101.94:9001/mqtt',
+            MQTT_USER: 'alumno',
+            MQTT_PASS: '1234',
             TOPICOS: {
                 temp: "6to_info/A/G4/temperatura", hum: "6to_info/A/G4/humedad",
                 luz: "6to_info/A/G4/luz", ruido: "6to_info/A/G4/ruido",
@@ -753,8 +765,27 @@
         let alertasEmitidas = { temp: false, hum: false, ruido: false, gas: false };
         let fallasSensoresEmitidas = { temp: false, hum: false, luz: false, ruido: false, gas: false, pres: false };
 
-        // VARIABLES GLOBALES VISOR 3D THREE.JS
+        // ==========================================
+        // AJUSTES DEL VISOR 3D (PARÁMETROS DE CLAUDE)
+        // ==========================================
+        const AJUSTES_3D = {
+            exposicion: 0.75,
+            entorno: 0.5,
+            luzDirecta: 0.85,
+            brilloMateriales: 0.92,
+            ANGULO_APERTURA: -Math.PI, // 180° hacia arriba sobre la bisagra
+            PIVOTE: { x: 0, y: 0.105, z: 0.024 }
+        };
+
         let scene3D, camera3D, renderer3D, controls3D, defaultCameraPosition, defaultTarget;
+        let pivoteTapa3D = null;
+        let modeloRaiz3D = null;
+        let aperturaActual = 0;   // 0 = cerrada, 1 = abierta
+        let aperturaDestino = 0;
+        let abrirConMouseActivo = false;
+        let camaraAnimando = false;
+        let camPosObjetivo = null;
+        let camTargetObjetivo = null;
 
         document.addEventListener('DOMContentLoaded', () => {
             inicializarGrafico();
@@ -765,7 +796,7 @@
             configurarBotonSubir(); 
             configurarNavegacion();
             inicializarObserverAnimaciones(); 
-            inicializarVisor3DDirecto(); // Inicializa Three.js sin depender de iframes ni archivos externos
+            inicializarVisor3DDirecto();
             
             if (typeof particlesJS !== "undefined") {
                 particlesJS("particles-js", {
@@ -782,85 +813,178 @@
             document.body.classList.add('locked');
         });
 
-        // INICIALIZADOR VISOR 3D THREE.JS
+        // ==========================================
+        // VISOR 3D CON PIVOTE EN BISAGRA Y COLORES NATURALES
+        // ==========================================
         function inicializarVisor3DDirecto() {
             const container = document.getElementById('webgl-container');
             if (!container || typeof THREE === 'undefined') return;
 
             scene3D = new THREE.Scene();
-            scene3D.background = new THREE.Color(0x080a0f);
+            scene3D.background = new THREE.Color(0x090c12);
 
-            camera3D = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-            camera3D.position.set(0, 4, 8);
+            camera3D = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.01, 100);
+            camera3D.position.set(0.28, 0.22, 0.38);
 
             renderer3D = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
             renderer3D.setSize(container.clientWidth, container.clientHeight);
             renderer3D.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer3D.outputEncoding = THREE.sRGBEncoding;
+            // ToneMapping lineal/neutro sin virar blancos al amarillo/naranja
+            renderer3D.toneMapping = THREE.LinearToneMapping;
+            renderer3D.toneMappingExposure = AJUSTES_3D.exposicion;
             container.appendChild(renderer3D.domElement);
 
             controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement);
             controls3D.enableDamping = true;
-            controls3D.dampingFactor = 0.05;
+            controls3D.dampingFactor = 0.06;
+            controls3D.rotateSpeed = 0.9;
+            controls3D.zoomSpeed = 1.1;
 
-            // Iluminación profesional
-            const ambientLight = new THREE.AmbientLight(0xffffff, 1.4);
-            scene3D.add(ambientLight);
+            // DETENER ANIMACIÓN AUTOMÁTICA DE CÁMARA SI EL USUARIO ROTA CON EL MOUSE
+            controls3D.addEventListener('start', () => { camaraAnimando = false; });
 
-            const dirLight = new THREE.DirectionalLight(0xffc500, 2.0);
-            dirLight.position.set(5, 12, 8);
+            // Iluminación neutra balanceada (sin tinte amarillo)
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x222938, AJUSTES_3D.entorno * 1.6);
+            scene3D.add(hemiLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, AJUSTES_3D.luzDirecta);
+            dirLight.position.set(1.5, 2.5, 2.0);
             scene3D.add(dirLight);
 
-            const backLight = new THREE.DirectionalLight(0x3b82f6, 1.2);
-            backLight.position.set(-6, -6, -6);
-            scene3D.add(backLight);
+            const fillLight = new THREE.DirectionalLight(0xdbeafe, AJUSTES_3D.luzDirecta * 0.45);
+            fillLight.position.set(-1.5, -1.0, -1.5);
+            scene3D.add(fillLight);
 
-            defaultCameraPosition = camera3D.position.clone();
-            defaultTarget = controls3D.target.clone();
+            // Función que configura el modelo GLTF una vez cargado
+            function procesarEscenaGLTF(gltf) {
+                const root = gltf.scene;
+                modeloRaiz3D = root;
 
-            // FUNCIÓN DE RESPALDO (Caja 3D genérica por si el .glb no carga por seguridad local)
-            function crearCajaDeRespaldo() {
-                const grupo = new THREE.Group();
-                
-                // Cuerpo de la caja estanca
-                const geomCaja = new THREE.BoxGeometry(3.5, 2.2, 1.5);
-                const matCaja = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.4, metalness: 0.2 });
-                const mallaCaja = new THREE.Mesh(geomCaja, matCaja);
-                grupo.add(mallaCaja);
+                // Oscurecer levemente materiales (92%) y limitar metalizado para colores naturales
+                root.traverse((child) => {
+                    if (child.isMesh && child.material) {
+                        child.material = child.material.clone();
+                        if (child.material.color) {
+                            child.material.color.multiplyScalar(AJUSTES_3D.brilloMateriales);
+                        }
+                        if (child.material.metalness !== undefined) {
+                            child.material.metalness = Math.min(child.material.metalness, 0.25);
+                        }
+                        if (child.material.roughness !== undefined) {
+                            child.material.roughness = Math.max(child.material.roughness, 0.45);
+                        }
+                    }
+                });
 
-                // Tapa frontal transparente o clara
-                const geomTapa = new THREE.BoxGeometry(3.4, 2.1, 0.2);
-                const matTapa = new THREE.MeshStandardMaterial({ color: 0x3b82f6, transparent: true, opacity: 0.4, roughness: 0.1 });
-                const mallaTapa = new THREE.Mesh(geomTapa, matTapa);
-                mallaTapa.position.z = 0.8;
-                grupo.add(mallaTapa);
+                scene3D.add(root);
+                root.updateMatrixWorld(true);
 
-                // LED indicador frontal
-                const geomLed = new THREE.SphereGeometry(0.12, 16, 16);
-                const matLed = new THREE.MeshBasicMaterial({ color: 0x10b981 });
-                const mallaLed = new THREE.Mesh(geomLed, matLed);
-                mallaLed.position.set(1.4, 0.8, 0.9);
-                grupo.add(mallaLed);
+                // Crear pivote en la bisagra superior de la tapa tal como indicó Claude
+                pivoteTapa3D = new THREE.Group();
+                pivoteTapa3D.position.set(
+                    AJUSTES_3D.PIVOTE.x,
+                    AJUSTES_3D.PIVOTE.y,
+                    AJUSTES_3D.PIVOTE.z
+                );
+                scene3D.add(pivoteTapa3D);
 
-                scene3D.add(grupo);
+                // Colgar caja_tapa, lcd_16x2 y pir_hcsr501 del pivote manteniendo su posición mundial
+                ['caja_tapa', 'lcd_16x2', 'pir_hcsr501'].forEach(nombreNodo => {
+                    const pieza = root.getObjectByName(nombreNodo);
+                    if (pieza) {
+                        pivoteTapa3D.attach(pieza);
+                    }
+                });
+
+                // Encuadrar cámara automáticamente según el tamaño real del modelo
+                const box = new THREE.Box3().setFromObject(root);
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3());
+                const maxDim = Math.max(size.x, size.y, size.z) || 0.25;
+
+                controls3D.target.copy(center);
+                camera3D.position.set(
+                    center.x + maxDim * 1.15,
+                    center.y + maxDim * 0.75,
+                    center.z + maxDim * 1.55
+                );
+                controls3D.minDistance = maxDim * 0.4;
+                controls3D.maxDistance = maxDim * 6.0;
+                controls3D.update();
+
+                defaultCameraPosition = camera3D.position.clone();
+                defaultTarget = controls3D.target.clone();
             }
 
-            // Intento de carga del archivo GLB
             const loader = new THREE.GLTFLoader();
-            loader.load('caja_estanca_sensores_v4.glb', (gltf) => {
-                const model = gltf.scene;
-                scene3D.add(model);
-                
-                const box = new THREE.Box3().setFromObject(model);
-                const center = box.getCenter(new THREE.Vector3());
-                model.position.sub(center);
-            }, undefined, (error) => {
-                console.warn("Cargando modelo geométrico de respaldo debido a restricciones de seguridad del navegador.");
-                crearCajaDeRespaldo();
+
+            // 1° Intentar cargar desde modelo_glb.js si está disponible en la carpeta (Evita bloqueo CORS en file://)
+            const b64Raw = window.MODELO_GLB_BASE64 || window.MODELO_BASE64 || window.GLB_BASE64 || window.modeloBase64 || null;
+            if (b64Raw && typeof b64Raw === 'string') {
+                try {
+                    const cleanB64 = b64Raw.includes(',') ? b64Raw.split(',')[1] : b64Raw;
+                    const binStr = atob(cleanB64);
+                    const len = binStr.length;
+                    const bytes = new Uint8Array(len);
+                    for (let i = 0; i < len; i++) bytes[i] = binStr.charCodeAt(i);
+                    loader.parse(bytes.buffer, '', procesarEscenaGLTF);
+                } catch (e) {
+                    loader.load('caja_estanca_sensores_v4.glb', procesarEscenaGLTF);
+                }
+            } else {
+                // 2° Cargar archivo .glb directo (Ideal para GitHub Pages y Live Server)
+                loader.load('caja_estanca_sensores_v4.glb', procesarEscenaGLTF);
+            }
+
+            // Raycaster para la opción "Abrir con el mouse" al pasar sobre la tapa/modelo
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2();
+
+            renderer3D.domElement.addEventListener('pointermove', (e) => {
+                if (!abrirConMouseActivo || !modeloRaiz3D) return;
+                const rect = renderer3D.domElement.getBoundingClientRect();
+                mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+                raycaster.setFromCamera(mouse, camera3D);
+
+                const objetosRaycast = [];
+                if (pivoteTapa3D) objetosRaycast.push(pivoteTapa3D);
+                if (modeloRaiz3D) objetosRaycast.push(modeloRaiz3D);
+
+                const intersects = raycaster.intersectObjects(objetosRaycast, true);
+                if (intersects.length > 0) {
+                    if (aperturaDestino < 0.5) fijarEstadoTapa3D(true);
+                } else {
+                    if (aperturaDestino > 0.5) fijarEstadoTapa3D(false);
+                }
             });
 
+            renderer3D.domElement.addEventListener('pointerleave', () => {
+                if (abrirConMouseActivo && aperturaDestino > 0.5) {
+                    fijarEstadoTapa3D(false);
+                }
+            });
+
+            // Bucle de animación suave (interpola la bisagra de la tapa y acomoda la cámara)
             function animate3D() {
                 requestAnimationFrame(animate3D);
+
+                // Animar rotación del pivote de la tapa
+                aperturaActual += (aperturaDestino - aperturaActual) * 0.08;
+                if (pivoteTapa3D) {
+                    pivoteTapa3D.rotation.x = AJUSTES_3D.ANGULO_APERTURA * aperturaActual;
+                }
+
+                // Acomodar cámara suavemente al abrir/cerrar
+                if (camaraAnimando && camPosObjetivo && camTargetObjetivo) {
+                    camera3D.position.lerp(camPosObjetivo, 0.07);
+                    controls3D.target.lerp(camTargetObjetivo, 0.07);
+                    if (camera3D.position.distanceTo(camPosObjetivo) < 0.005) {
+                        camaraAnimando = false;
+                    }
+                }
+
                 controls3D.update();
                 renderer3D.render(scene3D, camera3D);
             }
@@ -874,8 +998,59 @@
             });
         }
 
+        function fijarEstadoTapa3D(abrir) {
+            aperturaDestino = abrir ? 1 : 0;
+            const btn = document.getElementById('btn-abrir-tapa');
+            const txt = document.getElementById('txt-abrir-tapa');
+            if (btn && txt) {
+                if (abrir) {
+                    btn.classList.add('active-3d');
+                    txt.innerText = 'Cerrar Tapa';
+                } else {
+                    btn.classList.remove('active-3d');
+                    txt.innerText = 'Abrir Tapa';
+                }
+            }
+
+            // Acomodar la cámara sola para ver tanto el interior de la caja como la tapa abierta a 180°
+            if (defaultCameraPosition && defaultTarget) {
+                camaraAnimando = true;
+                if (abrir) {
+                    camPosObjetivo = new THREE.Vector3(
+                        defaultCameraPosition.x * 0.85,
+                        defaultCameraPosition.y + 0.10,
+                        defaultCameraPosition.z * 1.15
+                    );
+                    camTargetObjetivo = new THREE.Vector3(
+                        defaultTarget.x,
+                        defaultTarget.y + 0.04,
+                        defaultTarget.z
+                    );
+                } else {
+                    camPosObjetivo = defaultCameraPosition.clone();
+                    camTargetObjetivo = defaultTarget.clone();
+                }
+            }
+        }
+
+        function toggleTapa3D() {
+            const abrir = aperturaDestino < 0.5;
+            fijarEstadoTapa3D(abrir);
+        }
+
+        function toggleHoverTapa3D(btn) {
+            abrirConMouseActivo = !abrirConMouseActivo;
+            if (abrirConMouseActivo) {
+                btn.classList.add('active-3d');
+            } else {
+                btn.classList.remove('active-3d');
+            }
+        }
+
         function resetCamara3D() {
             if (camera3D && controls3D && defaultCameraPosition && defaultTarget) {
+                camaraAnimando = false;
+                fijarEstadoTapa3D(false);
                 camera3D.position.copy(defaultCameraPosition);
                 controls3D.target.copy(defaultTarget);
                 controls3D.update();
@@ -1063,15 +1238,29 @@
 
         function detenerMotorSimulacion() { if (simIntervalId) { clearInterval(simIntervalId); simIntervalId = null; } }
 
-        function iniciarConexionMQTT() {
+        function iniciarConexionMQTT(usarAnonimo = false) {
             detenerMotorSimulacion(); detenerConexionMQTT();
             manejarEstadoConexion(false, true); 
-            CONFIG.MODO_SIMULACION = false; CONFIG.INTERVALO_MS = 10000;
+            CONFIG.MODO_SIMULACION = false; CONFIG.INTERVALO_MS = 5000;
             const clientId = 'Dashboard_Murialdo_' + Math.random().toString(16).substr(2, 8);
-            mqttClient = mqtt.connect(CONFIG.BROKER_URL, { clientId: clientId, clean: true });
+            
+            const opciones = {
+                clientId: clientId,
+                clean: true,
+                connectTimeout: 4000,
+                reconnectPeriod: 4000
+            };
+            if (!usarAnonimo) {
+                opciones.username = CONFIG.MQTT_USER;
+                opciones.password = CONFIG.MQTT_PASS;
+            }
+
+            mqttClient = mqtt.connect(CONFIG.BROKER_URL, opciones);
             
             mqttClient.on('connect', () => {
-                manejarEstadoConexion(true); mqttClient.subscribe('6to_info/A/G4/#'); mostrarToast("Conexión MQTT Local Exitosa", "var(--green)", "ph-wifi-high");
+                manejarEstadoConexion(true);
+                mqttClient.subscribe('6to_info/A/G4/#');
+                mostrarToast("Conexión MQTT Local Exitosa", "var(--green)", "ph-wifi-high");
                 if (mqttLogInterval) { clearInterval(mqttLogInterval); mqttLogInterval = null; }
                 mqttLogInterval = setInterval(() => {
                     if (!errorActual && datosActuales.confort !== "SIN DATOS") {
@@ -1106,7 +1295,13 @@
                 if (topicoCambiado !== null) actualizarPantalla(datosActuales, topicoCambiado);
             });
 
-            mqttClient.on('error', () => manejarEstadoConexion(false));
+            mqttClient.on('error', (err) => {
+                if (!usarAnonimo && err && String(err).toLowerCase().includes('auth')) {
+                    iniciarConexionMQTT(true);
+                    return;
+                }
+                manejarEstadoConexion(false);
+            });
             mqttClient.on('close', () => manejarEstadoConexion(false));
         }
 
