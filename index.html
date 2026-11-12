@@ -302,7 +302,7 @@
         .chart-header h3 { font-family: var(--font-heading); font-size: 1.2rem; margin-bottom: 0.25rem; }
         .chart-header p { color: var(--muted); font-size: 0.9rem; }
 
-        /* VISOR 3D EMBEBIDO DIRECTO */
+        /* VISOR 3D EMBEBIDO DIRECTO Y FICHA TÉCNICA DE SENSORES */
         .viewer-3d-wrapper {
             background: var(--surface);
             border: 1px solid var(--border);
@@ -318,23 +318,198 @@
         .viewer-3d-topbar {
             padding: 1rem 1.5rem;
             border-bottom: 1px solid var(--border);
-            background: rgba(15, 15, 15, 0.85);
+            background: rgba(15, 15, 15, 0.9);
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
             gap: 1rem;
         }
-        #webgl-container {
+        .sensor-chips-bar {
+            padding: 0.75rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            background: rgba(10, 12, 18, 0.9);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .sensor-chips-label {
+            font-size: 0.78rem;
+            color: var(--muted);
+            font-weight: 600;
+            margin-right: 4px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .sensor-chip {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border);
+            color: var(--muted);
+            padding: 5px 11px;
+            border-radius: 50px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .sensor-chip:hover, .sensor-chip.active {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(255, 197, 0, 0.12);
+            transform: translateY(-1px);
+        }
+        .viewer-stage {
+            position: relative;
             width: 100%;
             height: 560px;
+        }
+        #webgl-container {
+            width: 100%;
+            height: 100%;
             display: block;
             background: radial-gradient(circle at center, #11151f 0%, #06080d 100%);
             cursor: grab;
-            position: relative;
         }
         #webgl-container:active {
             cursor: grabbing;
+        }
+
+        /* TARJETA FLOTANTE DE DATASHEET Y DESCRIPCIÓN */
+        .sensor-info-card {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 330px;
+            max-width: calc(100% - 40px);
+            background: rgba(14, 17, 24, 0.94);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 197, 0, 0.4);
+            border-radius: 14px;
+            padding: 1.25rem;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.75), 0 0 20px rgba(255, 197, 0, 0.1);
+            z-index: 25;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(12px) scale(0.97);
+            transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        .sensor-info-card.visible {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0) scale(1);
+        }
+        .sensor-info-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 0.6rem;
+        }
+        .sensor-info-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--accent);
+            background: rgba(255, 197, 0, 0.12);
+            border: 1px solid rgba(255, 197, 0, 0.3);
+            padding: 3px 9px;
+            border-radius: 50px;
+            margin-bottom: 6px;
+        }
+        .sensor-info-title {
+            font-family: var(--font-heading);
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--text);
+            line-height: 1.25;
+        }
+        .sensor-info-close {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid var(--border);
+            color: var(--muted);
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            flex-shrink: 0;
+        }
+        .sensor-info-close:hover {
+            color: var(--text);
+            border-color: var(--red);
+            background: rgba(239, 68, 68, 0.15);
+        }
+        .sensor-info-desc {
+            font-size: 0.86rem;
+            color: var(--muted);
+            line-height: 1.55;
+            margin-bottom: 0.9rem;
+        }
+        .sensor-info-specs {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 8px 11px;
+            margin-bottom: 1rem;
+            font-size: 0.78rem;
+            color: var(--muted);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-family: 'Consolas', monospace;
+        }
+        .sensor-info-specs strong {
+            color: var(--text);
+        }
+        .btn-datasheet {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            background: var(--accent);
+            color: #000;
+            font-weight: 700;
+            font-size: 0.86rem;
+            padding: 10px 14px;
+            border-radius: 8px;
+            transition: var(--transition);
+            box-shadow: 0 4px 15px var(--accent-glow);
+            text-decoration: none;
+        }
+        .btn-datasheet:hover {
+            background: #e5b100;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px var(--accent-glow);
+        }
+        .viewer-hint-pill {
+            position: absolute;
+            bottom: 14px;
+            left: 16px;
+            background: rgba(10, 12, 18, 0.8);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--border);
+            padding: 6px 12px;
+            border-radius: 50px;
+            font-size: 0.76rem;
+            color: var(--muted);
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
 
         /* SECCIÓN EQUIPO G4 */
@@ -366,7 +541,9 @@
             .login-card { padding: 1.5rem; width: 92%; }
             .team-grid { grid-template-columns: 1fr; } 
             .gauge-container { width: 100%; }
-            #webgl-container { height: 420px; }
+            .viewer-stage { height: 460px; }
+            .sensor-info-card { top: auto; bottom: 12px; right: 12px; left: 12px; width: auto; max-width: none; }
+            .viewer-hint-pill { display: none; }
         }
 
         @media (max-width: 400px) {
@@ -636,7 +813,7 @@
     </section>
 
     <!-- ==========================================
-         SECCIÓN HARDWARE 3D EMBEBIDO CON APERTURA DE TAPA REAL
+         SECCIÓN HARDWARE 3D CON SENSORES CLICKEABLES Y DATASHEETS
          ========================================== -->
     <section id="modelo3d" class="section">
         <div class="container">
@@ -651,7 +828,7 @@
                         <i class="ph-fill ph-cube-focus" style="color: var(--accent); font-size: 1.5rem;"></i>
                         <div>
                             <div style="font-family: var(--font-heading); font-size: 0.95rem; font-weight: 700;">Visor Interactivo 3D (ESP32-C3 + Sensores)</div>
-                            <div style="font-size: 0.8rem; color: var(--muted);">Rotá con clic izquierdo, hacé zoom con la rueda y abrí la tapa para inspeccionar el interior.</div>
+                            <div style="font-size: 0.8rem; color: var(--muted);">Hacé clic sobre cualquier sensor en el modelo 3D (o en la barra inferior) para ver su función y Datasheet.</div>
                         </div>
                     </div>
                     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -666,8 +843,48 @@
                         </button>
                     </div>
                 </div>
-                <!-- Contenedor WebGL para Three.js -->
-                <div id="webgl-container"></div>
+
+                <!-- Barra de selección directa de componentes -->
+                <div class="sensor-chips-bar">
+                    <span class="sensor-chips-label"><i class="ph-bold ph-cpu"></i> Inspeccionar Hardware:</span>
+                    <button class="sensor-chip" data-sensor="esp32" onclick="seleccionarComponentePorClave('esp32')"><i class="ph-bold ph-cpu"></i> ESP32-C3 Mini</button>
+                    <button class="sensor-chip" data-sensor="dht22" onclick="seleccionarComponentePorClave('dht22')"><i class="ph-bold ph-thermometer"></i> DHT22</button>
+                    <button class="sensor-chip" data-sensor="bh1750" onclick="seleccionarComponentePorClave('bh1750')"><i class="ph-bold ph-sun"></i> BH1750</button>
+                    <button class="sensor-chip" data-sensor="mq135" onclick="seleccionarComponentePorClave('mq135')"><i class="ph-bold ph-wind"></i> MQ-135</button>
+                    <button class="sensor-chip" data-sensor="inmp441" onclick="seleccionarComponentePorClave('inmp441')"><i class="ph-bold ph-microphone"></i> INMP441</button>
+                    <button class="sensor-chip" data-sensor="pir" onclick="seleccionarComponentePorClave('pir')"><i class="ph-bold ph-user-focus"></i> PIR HC-SR501</button>
+                    <button class="sensor-chip" data-sensor="lcd" onclick="seleccionarComponentePorClave('lcd')"><i class="ph-bold ph-monitor"></i> LCD 16x2 I2C</button>
+                </div>
+
+                <!-- Escenario 3D + Tarjeta Flotante de Datasheet -->
+                <div class="viewer-stage">
+                    <div id="webgl-container"></div>
+
+                    <div class="viewer-hint-pill">
+                        <i class="ph-bold ph-hand-pointing" style="color: var(--accent);"></i> Tip: Hacé clic en cualquier pieza 3D para ver su ficha técnica
+                    </div>
+
+                    <!-- Tarjeta emergente con descripción y Datasheet -->
+                    <div class="sensor-info-card" id="sensor-info-card">
+                        <div class="sensor-info-header">
+                            <div>
+                                <span class="sensor-info-badge" id="info-card-badge"><i class="ph-bold ph-circuitry"></i> Sensor IoT</span>
+                                <h4 class="sensor-info-title" id="info-card-title">Nombre del Sensor</h4>
+                            </div>
+                            <button class="sensor-info-close" onclick="cerrarTarjetaSensor()" title="Cerrar ficha">
+                                <i class="ph-bold ph-x"></i>
+                            </button>
+                        </div>
+                        <p class="sensor-info-desc" id="info-card-desc">Descripción detallada del sensor seleccionado.</p>
+                        <div class="sensor-info-specs" id="info-card-specs">
+                            <span><strong>Conexión:</strong> GPIO --</span>
+                            <span><strong> Alimentación:</strong> 3.3V / 5V</span>
+                        </div>
+                        <a href="#" target="_blank" rel="noopener noreferrer" class="btn-datasheet" id="info-card-link">
+                            <i class="ph-bold ph-file-pdf"></i> Ver Datasheet Oficial (PDF)
+                        </a>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
@@ -740,6 +957,92 @@
             MAX_HISTORIAL_GRAFICO: 45 
         };
 
+        // ==========================================
+        // CATÁLOGO DE SENSORES Y LINKS A DATASHEETS OFICIALES
+        // ==========================================
+        const CATALOGO_SENSORES_3D = {
+            esp32: {
+                titulo: "ESP32-C3 SuperMini",
+                categoria: "Microcontrolador Wi-Fi / BLE",
+                descripcion: "Cerebro del Nodo G4 basado en arquitectura RISC-V de 32 bits (160 MHz). Procesa las lecturas de los 5 sensores en tiempo real sin bloqueos, controla el LCD autónomo y transmite los paquetes por protocolo MQTT mediante Wi-Fi 2.4 GHz.",
+                pines: "I2C (GPIO 8/9) | I2S (GPIO 4/5/6) | ADC (GPIO 0)",
+                alimentacion: "5V vía USB-C / Regulador interno 3.3V",
+                requiereAbrirTapa: true,
+                keywords: ["esp32", "supermini", "mcu", "placa", "board", "c3", "usb"],
+                datasheet: "https://www.espressif.com/sites/default/files/documentation/esp32-c3_datasheet_en.pdf"
+            },
+            dht22: {
+                titulo: "Sensor Digital DHT22 (AM2302)",
+                categoria: "Temperatura y Humedad",
+                descripcion: "Sensor digital calibrado de alta precisión. Mide la temperatura ambiental (-40 a 80 °C con precisión de ±0.5 °C) y la humedad relativa (0 a 100% RH), variables clave para determinar el índice de confort térmico en el aula.",
+                pines: "Datos: GPIO 10 (Protocolo One-Wire)",
+                alimentacion: "3.3V - 5V DC",
+                requiereAbrirTapa: false,
+                keywords: ["dht", "dht22", "am2302", "temp", "hum"],
+                datasheet: "https://www.sparkfun.com/datasheets/Sensors/Temperature/DHT22.pdf"
+            },
+            bh1750: {
+                titulo: "Luxómetro Digital BH1750FVI",
+                categoria: "Intensidad Luminosa (Lux)",
+                descripcion: "Sensor fotoeléctrico digital con conversor ADC de 16 bits integrado. Mide la iluminancia real de 1 a 65.535 lux en el espectro visible del ojo humano, permitiendo verificar si el aula cumple el mínimo ergonómico de 300 lx.",
+                pines: "Bus I2C: SDA (GPIO 8) | SCL (GPIO 9) — Dir: 0x23",
+                alimentacion: "3.3V DC",
+                requiereAbrirTapa: false,
+                keywords: ["bh1750", "gy30", "gy-30", "lux", "luz", "light"],
+                datasheet: "https://www.mouser.com/datasheet/2/348/bh1750fvi-e-186247.pdf"
+            },
+            mq135: {
+                titulo: "Sensor Electroquímico MQ-135",
+                categoria: "Calidad de Aire y Gases (PPM)",
+                descripcion: "Detecta concentraciones de gases nocivos, CO2 acumulado, amoníaco, benceno, humo y compuestos volátiles. Su salida analógica es muestreada y filtrada por el ADC de 12 bits del ESP32-C3 para alertar sobre aire viciado.",
+                pines: "Analógico AO: GPIO 0 | Digital DO: GPIO 7",
+                alimentacion: "5V DC (Calefactor interno SnO2)",
+                requiereAbrirTapa: false,
+                keywords: ["mq135", "mq-135", "mq", "gas", "aire"],
+                datasheet: "https://www.olimex.com/Products/Components/Sensors/Gas/SNS-MQ135/resources/SNS-MQ135.pdf"
+            },
+            inmp441: {
+                titulo: "Micrófono MEMS Omnidireccional INMP441",
+                categoria: "Nivel de Ruido Acústico (dB)",
+                descripcion: "Micrófono digital MEMS de ultra bajo ruido con salida directa I2S de 24 bits. El firmware aplica un filtro elimina-continua (DC-Blocker) y calcula el valor RMS acústico para obtener los decibeles (dB SPL) del ambiente.",
+                pines: "Bus I2S: SCK (GPIO 4) | WS (GPIO 5) | SD (GPIO 6)",
+                alimentacion: "3.3V DC (Consumo 1.4 mA)",
+                requiereAbrirTapa: false,
+                keywords: ["inmp441", "inmp", "mic", "ruido", "audio", "i2s"],
+                datasheet: "https://invensense.tdk.com/wp-content/uploads/2015/02/INMP441.pdf"
+            },
+            pir: {
+                titulo: "Sensor Piroeléctrico PIR HC-SR501",
+                categoria: "Detección de Movimiento y Presencia",
+                descripcion: "Detecta variaciones de radiación infrarroja emitida por el cuerpo humano mediante su lente Fresnel. Permite saber en tiempo real si el aula o laboratorio se encuentra ocupado y registra la hora exacta del último movimiento.",
+                pines: "Salida Digital OUT: GPIO 3",
+                alimentacion: "5V DC",
+                requiereAbrirTapa: false,
+                keywords: ["pir", "hcsr501", "hc-sr501", "sr501", "movimiento", "presencia"],
+                datasheet: "https://www.mpja.com/download/31227sc.pdf"
+            },
+            lcd: {
+                titulo: "Display LCD 16x2 + Módulo I2C PCF8574",
+                categoria: "Interfaz Local Autónoma",
+                descripcion: "Pantalla alfanumérica de 2 filas por 16 columnas con expansor I2C. Garantiza el funcionamiento en Modo Autónomo mostrando temperatura, humedad, luz, gases, ruido y estado de confort incluso sin conexión Wi-Fi.",
+                pines: "Bus I2C: SDA (GPIO 8) | SCL (GPIO 9) — Dir: 0x27",
+                alimentacion: "5V DC",
+                requiereAbrirTapa: false,
+                keywords: ["lcd", "16x2", "display", "pantalla", "pcf8574"],
+                datasheet: "https://www.sparkfun.com/datasheets/LCD/HD44780.pdf"
+            },
+            caja: {
+                titulo: "Gabinete Estanco IP65 Mecanizado",
+                categoria: "Estructura y Protección Física",
+                descripcion: "Caja estanca industrial de polímero ABS resistente a impactos y polvo. Alberga el circuito impreso, el cableado interno y cuenta con calados a medida para las lentes y rejillas de ventilación de los sensores ambientales.",
+                pines: "Montaje en Tapa: LCD 16x2 + PIR | Base: ESP32-C3 + Sensores",
+                alimentacion: "Aislación eléctrica clase II",
+                requiereAbrirTapa: false,
+                keywords: ["caja_tapa", "caja_base", "caja", "gabinete", "estanca"],
+                datasheet: "https://www.iec.ch/ip-ratings"
+            }
+        };
+
         let isAdmin = false;
         let simIntervalId = null;
         let mqttLogInterval = null;
@@ -773,19 +1076,20 @@
             entorno: 0.5,
             luzDirecta: 0.85,
             brilloMateriales: 0.92,
-            ANGULO_APERTURA: -Math.PI, // 180° hacia arriba sobre la bisagra
+            ANGULO_APERTURA: -Math.PI,
             PIVOTE: { x: 0, y: 0.105, z: 0.024 }
         };
 
         let scene3D, camera3D, renderer3D, controls3D, defaultCameraPosition, defaultTarget;
         let pivoteTapa3D = null;
         let modeloRaiz3D = null;
-        let aperturaActual = 0;   // 0 = cerrada, 1 = abierta
+        let aperturaActual = 0;
         let aperturaDestino = 0;
         let abrirConMouseActivo = false;
         let camaraAnimando = false;
         let camPosObjetivo = null;
         let camTargetObjetivo = null;
+        let meshesResaltados = [];
 
         document.addEventListener('DOMContentLoaded', () => {
             inicializarGrafico();
@@ -814,7 +1118,103 @@
         });
 
         // ==========================================
-        // VISOR 3D CON PIVOTE EN BISAGRA Y COLORES NATURALES
+        // IDENTIFICADOR INTELIGENTE DE NODOS 3D -> SENSOR
+        // ==========================================
+        function detectarClaveSensorDesdeObjeto3D(obj) {
+            let actual = obj;
+            while (actual) {
+                const nombre = (actual.name || "").toLowerCase();
+                if (nombre) {
+                    if (nombre.includes("lcd") || nombre.includes("16x2") || nombre.includes("display")) return "lcd";
+                    if (nombre.includes("pir") || nombre.includes("sr501") || nombre.includes("fresnel")) return "pir";
+                    if (nombre.includes("dht") || nombre.includes("am2302")) return "dht22";
+                    if (nombre.includes("bh1750") || nombre.includes("gy30") || nombre.includes("lux") || nombre.includes("luz")) return "bh1750";
+                    if (nombre.includes("mq135") || nombre.includes("mq_135") || nombre.includes("mq") || nombre.includes("gas")) return "mq135";
+                    if (nombre.includes("inmp") || nombre.includes("441") || nombre.includes("mic") || nombre.includes("i2s")) return "inmp441";
+                    if (nombre.includes("esp32") || nombre.includes("c3") || nombre.includes("supermini") || nombre.includes("mcu") || nombre.includes("usb")) return "esp32";
+                    if (nombre.includes("caja_tapa") || nombre.includes("caja_base") || nombre.includes("caja")) return "caja";
+                }
+                actual = actual.parent;
+            }
+            return null;
+        }
+
+        function limpiarResaltado3D() {
+            meshesResaltados.forEach(item => {
+                if (item.mesh && item.mesh.material && item.mesh.material.emissive) {
+                    item.mesh.material.emissive.copy(item.origEmissive);
+                    item.mesh.material.emissiveIntensity = item.origIntensity;
+                }
+            });
+            meshesResaltados = [];
+        }
+
+        function resaltarSensorEnEscena3D(claveSensor) {
+            limpiarResaltado3D();
+            const info = CATALOGO_SENSORES_3D[claveSensor];
+            if (!info) return;
+
+            const buscarYResaltar = (raiz) => {
+                if (!raiz) return;
+                raiz.traverse((child) => {
+                    if (child.isMesh && child.material && child.material.emissive) {
+                        const claveDetectada = detectarClaveSensorDesdeObjeto3D(child);
+                        if (claveDetectada === claveSensor) {
+                            meshesResaltados.push({
+                                mesh: child,
+                                origEmissive: child.material.emissive.clone(),
+                                origIntensity: child.material.emissiveIntensity || 1
+                            });
+                            child.material.emissive.setHex(0xffc500);
+                            child.material.emissiveIntensity = 0.45;
+                        }
+                    }
+                });
+            };
+
+            buscarYResaltar(modeloRaiz3D);
+            buscarYResaltar(pivoteTapa3D);
+        }
+
+        function seleccionarComponentePorClave(claveSensor) {
+            const info = CATALOGO_SENSORES_3D[claveSensor];
+            if (!info) return;
+
+            // Si el usuario selecciona el ESP32 interno y la tapa está cerrada, abrirla automáticamente
+            if (info.requiereAbrirTapa && aperturaDestino < 0.5) {
+                fijarEstadoTapa3D(true);
+            }
+
+            // Actualizar estado visual de los chips
+            document.querySelectorAll('.sensor-chip').forEach(chip => {
+                chip.classList.toggle('active', chip.getAttribute('data-sensor') === claveSensor);
+            });
+
+            // Resaltar pieza en el modelo 3D
+            resaltarSensorEnEscena3D(claveSensor);
+
+            // Rellenar y mostrar tarjeta flotante con descripción y link al Datasheet
+            document.getElementById('info-card-badge').innerHTML = `<i class="ph-bold ph-circuitry"></i> ${info.categoria}`;
+            document.getElementById('info-card-title').innerText = info.titulo;
+            document.getElementById('info-card-desc').innerText = info.descripcion;
+            document.getElementById('info-card-specs').innerHTML = `
+                <span><strong>Conexión:</strong> ${info.pines}</span>
+                <span><strong>Alimentación:</strong> ${info.alimentacion}</span>
+            `;
+            const linkEl = document.getElementById('info-card-link');
+            linkEl.href = info.datasheet;
+
+            document.getElementById('sensor-info-card').classList.add('visible');
+        }
+
+        function cerrarTarjetaSensor() {
+            document.getElementById('sensor-info-card').classList.remove('visible');
+            document.querySelectorAll('.sensor-chip').forEach(chip => chip.classList.remove('active'));
+            limpiarResaltado3D();
+        }
+
+        // ==========================================
+        // VISOR 3D CON PIVOTE EN BISAGRA, RAYCAST CLIC Y COLORES NATURALES
         // ==========================================
         function inicializarVisor3DDirecto() {
             const container = document.getElementById('webgl-container');
@@ -830,7 +1230,6 @@
             renderer3D.setSize(container.clientWidth, container.clientHeight);
             renderer3D.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer3D.outputEncoding = THREE.sRGBEncoding;
-            // ToneMapping lineal/neutro sin virar blancos al amarillo/naranja
             renderer3D.toneMapping = THREE.LinearToneMapping;
             renderer3D.toneMappingExposure = AJUSTES_3D.exposicion;
             container.appendChild(renderer3D.domElement);
@@ -841,10 +1240,8 @@
             controls3D.rotateSpeed = 0.9;
             controls3D.zoomSpeed = 1.1;
 
-            // DETENER ANIMACIÓN AUTOMÁTICA DE CÁMARA SI EL USUARIO ROTA CON EL MOUSE
             controls3D.addEventListener('start', () => { camaraAnimando = false; });
 
-            // Iluminación neutra balanceada (sin tinte amarillo)
             const hemiLight = new THREE.HemisphereLight(0xffffff, 0x222938, AJUSTES_3D.entorno * 1.6);
             scene3D.add(hemiLight);
 
@@ -856,12 +1253,10 @@
             fillLight.position.set(-1.5, -1.0, -1.5);
             scene3D.add(fillLight);
 
-            // Función que configura el modelo GLTF una vez cargado
             function procesarEscenaGLTF(gltf) {
                 const root = gltf.scene;
                 modeloRaiz3D = root;
 
-                // Oscurecer levemente materiales (92%) y limitar metalizado para colores naturales
                 root.traverse((child) => {
                     if (child.isMesh && child.material) {
                         child.material = child.material.clone();
@@ -880,7 +1275,6 @@
                 scene3D.add(root);
                 root.updateMatrixWorld(true);
 
-                // Crear pivote en la bisagra superior de la tapa tal como indicó Claude
                 pivoteTapa3D = new THREE.Group();
                 pivoteTapa3D.position.set(
                     AJUSTES_3D.PIVOTE.x,
@@ -889,7 +1283,6 @@
                 );
                 scene3D.add(pivoteTapa3D);
 
-                // Colgar caja_tapa, lcd_16x2 y pir_hcsr501 del pivote manteniendo su posición mundial
                 ['caja_tapa', 'lcd_16x2', 'pir_hcsr501'].forEach(nombreNodo => {
                     const pieza = root.getObjectByName(nombreNodo);
                     if (pieza) {
@@ -897,7 +1290,6 @@
                     }
                 });
 
-                // Encuadrar cámara automáticamente según el tamaño real del modelo
                 const box = new THREE.Box3().setFromObject(root);
                 const center = box.getCenter(new THREE.Vector3());
                 const size = box.getSize(new THREE.Vector3());
@@ -919,7 +1311,6 @@
 
             const loader = new THREE.GLTFLoader();
 
-            // 1° Intentar cargar desde modelo_glb.js si está disponible en la carpeta (Evita bloqueo CORS en file://)
             const b64Raw = window.MODELO_GLB_BASE64 || window.MODELO_BASE64 || window.GLB_BASE64 || window.modeloBase64 || null;
             if (b64Raw && typeof b64Raw === 'string') {
                 try {
@@ -933,16 +1324,23 @@
                     loader.load('caja_estanca_sensores_v4.glb', procesarEscenaGLTF);
                 }
             } else {
-                // 2° Cargar archivo .glb directo (Ideal para GitHub Pages y Live Server)
                 loader.load('caja_estanca_sensores_v4.glb', procesarEscenaGLTF);
             }
 
-            // Raycaster para la opción "Abrir con el mouse" al pasar sobre la tapa/modelo
+            // Raycaster para clic sobre sensores y hover opcional
             const raycaster = new THREE.Raycaster();
             const mouse = new THREE.Vector2();
+            let pointerDownPos = { x: 0, y: 0 };
 
-            renderer3D.domElement.addEventListener('pointermove', (e) => {
-                if (!abrirConMouseActivo || !modeloRaiz3D) return;
+            renderer3D.domElement.addEventListener('pointerdown', (e) => {
+                pointerDownPos = { x: e.clientX, y: e.clientY };
+            });
+
+            renderer3D.domElement.addEventListener('pointerup', (e) => {
+                // Solo disparar selección si fue un clic limpio (no un arrastre de cámara)
+                const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+                if (dist > 6 || !modeloRaiz3D) return;
+
                 const rect = renderer3D.domElement.getBoundingClientRect();
                 mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
                 mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -954,9 +1352,42 @@
 
                 const intersects = raycaster.intersectObjects(objetosRaycast, true);
                 if (intersects.length > 0) {
-                    if (aperturaDestino < 0.5) fijarEstadoTapa3D(true);
-                } else {
-                    if (aperturaDestino > 0.5) fijarEstadoTapa3D(false);
+                    // Buscar el primer impacto que corresponda a un sensor específico antes que a la carcasa
+                    let claveElegida = null;
+                    for (let i = 0; i < intersects.length; i++) {
+                        const c = detectarClaveSensorDesdeObjeto3D(intersects[i].object);
+                        if (c && c !== 'caja') {
+                            claveElegida = c;
+                            break;
+                        }
+                        if (!claveElegida && c) claveElegida = c;
+                    }
+                    if (claveElegida) {
+                        seleccionarComponentePorClave(claveElegida);
+                    }
+                }
+            });
+
+            renderer3D.domElement.addEventListener('pointermove', (e) => {
+                if (!modeloRaiz3D) return;
+                const rect = renderer3D.domElement.getBoundingClientRect();
+                mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+                raycaster.setFromCamera(mouse, camera3D);
+
+                const objetosRaycast = [];
+                if (pivoteTapa3D) objetosRaycast.push(pivoteTapa3D);
+                if (modeloRaiz3D) objetosRaycast.push(modeloRaiz3D);
+
+                const intersects = raycaster.intersectObjects(objetosRaycast, true);
+                renderer3D.domElement.style.cursor = intersects.length > 0 ? 'pointer' : 'grab';
+
+                if (abrirConMouseActivo) {
+                    if (intersects.length > 0) {
+                        if (aperturaDestino < 0.5) fijarEstadoTapa3D(true);
+                    } else {
+                        if (aperturaDestino > 0.5) fijarEstadoTapa3D(false);
+                    }
                 }
             });
 
@@ -966,17 +1397,14 @@
                 }
             });
 
-            // Bucle de animación suave (interpola la bisagra de la tapa y acomoda la cámara)
             function animate3D() {
                 requestAnimationFrame(animate3D);
 
-                // Animar rotación del pivote de la tapa
                 aperturaActual += (aperturaDestino - aperturaActual) * 0.08;
                 if (pivoteTapa3D) {
                     pivoteTapa3D.rotation.x = AJUSTES_3D.ANGULO_APERTURA * aperturaActual;
                 }
 
-                // Acomodar cámara suavemente al abrir/cerrar
                 if (camaraAnimando && camPosObjetivo && camTargetObjetivo) {
                     camera3D.position.lerp(camPosObjetivo, 0.07);
                     controls3D.target.lerp(camTargetObjetivo, 0.07);
@@ -1012,7 +1440,6 @@
                 }
             }
 
-            // Acomodar la cámara sola para ver tanto el interior de la caja como la tapa abierta a 180°
             if (defaultCameraPosition && defaultTarget) {
                 camaraAnimando = true;
                 if (abrir) {
@@ -1050,6 +1477,7 @@
         function resetCamara3D() {
             if (camera3D && controls3D && defaultCameraPosition && defaultTarget) {
                 camaraAnimando = false;
+                cerrarTarjetaSensor();
                 fijarEstadoTapa3D(false);
                 camera3D.position.copy(defaultCameraPosition);
                 controls3D.target.copy(defaultTarget);
